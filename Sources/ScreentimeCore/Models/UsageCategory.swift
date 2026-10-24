@@ -74,7 +74,7 @@ public enum CategoryCatalog {
     }
 
     static let apps: [String: UsageCategory] = [
-        "com.apple.Xcode": .productivity,
+        "com.apple.dt.Xcode": .productivity,
         "com.microsoft.VSCode": .productivity,
         "com.todesktop.230313mzl4w4u92": .productivity,  // Cursor
         "dev.zed.Zed": .productivity,

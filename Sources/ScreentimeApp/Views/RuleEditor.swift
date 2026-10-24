@@ -63,21 +63,22 @@ struct RuleEditor: View {
             } label: {
                 Image(systemName: rule.symbol)
                     .font(.system(size: 18))
-                    .foregroundStyle(Theme.ember)
+                    .foregroundStyle(Theme.accent)
                     .frame(width: 40, height: 40)
-                    .background(Theme.emberSoft, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             .menuStyle(.button)
             .buttonStyle(.plain)
             .menuIndicator(.hidden)
             .help("Choose a symbol")
             .disabled(!isEditable)
-            TextField("Name", text: $rule.name)
-                .textFieldStyle(.plain)
-                .font(Theme.Font.title)
-                .disabled(!isEditable)
-            Spacer()
-            liveMatch
+            VStack(alignment: .leading, spacing: 2) {
+                TextField("Name", text: $rule.name)
+                    .textFieldStyle(.plain)
+                    .font(Theme.Font.title)
+                    .disabled(!isEditable)
+                liveMatch
+            }
         }
         .padding(.horizontal, Theme.Space.l)
         .padding(.top, Theme.Space.l)
@@ -97,9 +98,9 @@ struct RuleEditor: View {
                 systemImage: matched ? "checkmark.circle.fill" : "circle.dashed"
             )
             .font(Theme.Font.caption)
-            .foregroundStyle(matched ? Theme.ember : .secondary)
+            .foregroundStyle(matched ? Theme.accent : .secondary)
             .lineLimit(1)
-            .frame(maxWidth: 200, alignment: .trailing)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .help("Checked against the last app or page you used")
         }
     }
@@ -114,11 +115,11 @@ struct RuleEditor: View {
             } label: {
                 Label("Add App, Site, Page or Phrase\u{2026}", systemImage: "plus")
             }
-            .buttonStyle(.link)
+            .buttonStyle(.borderless)
         } header: {
             Text("What")
         } footer: {
-            Text("Pages and phrases are checked against the address, title and visible text of the page in front.")
+            Text("Pages and phrases are checked against the address, title and visible text of the page or app window in front.")
                 .font(Theme.Font.caption).foregroundStyle(.secondary)
         }
     }
@@ -131,7 +132,7 @@ struct RuleEditor: View {
             } label: {
                 Label("Add Exception\u{2026}", systemImage: "plus")
             }
-            .buttonStyle(.link)
+            .buttonStyle(.borderless)
         }
     }
 
@@ -194,7 +195,7 @@ struct RuleEditor: View {
                 } label: {
                     Label("Add Time Window", systemImage: "plus")
                 }
-                .buttonStyle(.link)
+                .buttonStyle(.borderless)
             }
         }
     }
@@ -229,6 +230,7 @@ struct RuleEditor: View {
                 Text("Block").tag(ResponseKind.block)
             }
             .pickerStyle(.segmented)
+            .labelsHidden()
             switch rule.response {
             case .track:
                 Text("Count time and opens. Nothing appears unless a limit below is reached.")
@@ -238,6 +240,9 @@ struct RuleEditor: View {
             case .block(let settings):
                 blockControls(settings)
             }
+            TextField(
+                "Message on the shield", text: Binding(get: { rule.message ?? "" }, set: { rule.message = $0.isEmpty ? nil : $0 }),
+                prompt: Text("Is this important right now?"))
         } header: {
             Text("Response")
         }
@@ -262,9 +267,7 @@ struct RuleEditor: View {
                             if isOn, next.count > 1 { next.remove(minutes) } else { next.insert(minutes) }
                             binding.wrappedValue.sessionMinutes = next.sorted()
                         }
-                        .buttonStyle(.bordered)
-                        .tint(isOn ? Theme.ember : nil)
-                        .controlSize(.small)
+                        .buttonStyle(PillButtonStyle(isSelected: isOn, compact: true))
                     }
                 }
             }
@@ -302,6 +305,7 @@ struct RuleEditor: View {
         HStack {
             if !isNew {
                 Button("Delete Rule", role: .destructive) { confirmsDelete = true }
+                    .foregroundStyle(.red)
                     .disabled(!isEditable)
                     .confirmationDialog(
                         "Delete \u{201C}\(rule.name)\u{201D}?", isPresented: $confirmsDelete
@@ -390,6 +394,7 @@ private struct TargetRows: View {
     private static func appName(_ bundleID: String) -> String {
         NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
             .map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") }
+            ?? RuleTemplate.knownAppName(bundleID: bundleID)
             ?? bundleID
     }
 }
@@ -411,7 +416,7 @@ private struct ScheduleWindowEditor: View {
                             .font(Theme.Font.label)
                             .frame(width: 24, height: 24)
                             .foregroundStyle(isOn ? Color.white : .primary)
-                            .background(Circle().fill(isOn ? Theme.ember : Theme.track))
+                            .background(Circle().fill(isOn ? Theme.accent : Theme.track))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(Calendar.current.weekdaySymbols[day - 1])

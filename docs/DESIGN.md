@@ -17,12 +17,13 @@ All tokens live in `Sources/ScreentimeApp/Design/Theme.swift`.
 
 | Token | Light | Dark | Use |
 | --- | --- | --- | --- |
-| `ember` (accent) | `#C8502A` | `#F0794A` | Controls, selection, active shields, the focus ring |
+| `accent` | `#2E7D57` | `#3FAE77` | Controls, selection, positive states (on track, turned back), the focus ring |
+| `caution` | `#B26B12` | `#E3A040` | Over goal, overrides, missing permission, paused rules |
 | `canvas` | system window background | system window background | Window panes |
 | `inkSecondary` | system secondary label | system secondary label | Captions and metadata |
 | Category `social` | `#D9623F` | `#EE7E5E` | Usage series |
 | Category `entertainment` | `#9A5A86` | `#C083AE` | Usage series |
-| Category `productivity` | `#4F8C69` | `#79B892` | Usage series |
+| Category `productivity` | `#4A72A8` | `#7FA4D6` | Usage series |
 | Category `communication` | `#3A8592` | `#66B2BE` | Usage series |
 | Category `reading` | `#B88A2E` | `#DDB25A` | Usage series |
 | Category `games` | `#C4566F` | `#E27E95` | Usage series |
@@ -53,10 +54,10 @@ One per surface, built at 120 percent:
 
 - Today: the oversized serif total and the **day ribbon**, a 24-hour band where
   each minute of use is drawn in its category colour, with a live "now" tick.
-- Shield: a glass card over exactly the offending window. "Allow 1 minute"
+- Shield: a calm, opaque card over exactly the offending window or page. "Allow 1 minute"
   requires a press-and-hold whose ring fills over two seconds, so overrides are
   deliberate rather than reflexive.
-- Focus: a single ember arc that drains as the session runs.
+- Focus: a single green arc that drains as the session runs.
 - Menu bar: the same ribbon in miniature, so the status item reads at a glance.
 
 ## Motion
@@ -76,3 +77,16 @@ Every surface is reviewed rendered in light and dark at 900 x 600 and
 1,280 x 820 against the five dimensions (philosophy, hierarchy, craft,
 functionality, originality). Scores are judgements; defects are recorded and
 fixed, not averaged away.
+
+Debug builds include a gallery for this. Run an isolated copy with its own data
+folder so real history and rules are untouched:
+
+```sh
+SCREENTIME_DATA_DIR=/tmp/screentime-qa \
+  "build/DerivedData/Build/Products/Debug/Screentime++.app/Contents/MacOS/Screentime++" \
+  --qa-gallery
+```
+
+Every sheet, settings pane, the menu bar panel, each shield variant and the
+toast open in titled windows ("QA ..."), so each can be captured by window ID
+(`screencapture -l`). Add `-NSRequiresAquaSystemAppearance YES` for light mode.

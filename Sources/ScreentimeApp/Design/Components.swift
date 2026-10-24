@@ -1,34 +1,133 @@
 import ScreentimeCore
 import SwiftUI
 
-/// App icon for apps; a quiet lettered tile in the category colour for sites.
+/// A compact, single-line label. Never wraps: a chip that breaks mid-word is a bug.
+struct Chip: View {
+    let title: String
+    var symbol: String?
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if let symbol {
+                Image(systemName: symbol).font(.system(size: 9, weight: .semibold))
+            }
+            Text(title).font(.system(size: 11, weight: .medium))
+        }
+        .lineLimit(1)
+        .fixedSize()
+        .padding(.horizontal, 8)
+        .frame(height: 20)
+        .foregroundStyle(.secondary)
+        .background(Theme.track, in: Capsule())
+    }
+}
+
+/// Lays children out left to right, breaking to a new line only between
+/// children, each at its ideal size.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+    var lineSpacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(width: proposal.width ?? .infinity, subviews: subviews)
+        let width = rows.map(\.width).max() ?? 0
+        let height = rows.map(\.height).reduce(0, +) + lineSpacing * CGFloat(max(0, rows.count - 1))
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in arrange(width: bounds.width, subviews: subviews) {
+            var x = bounds.minX
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(.unspecified)
+                subviews[index].place(
+                    at: CGPoint(x: x, y: y + (row.height - size.height) / 2), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += row.height + lineSpacing
+        }
+    }
+
+    private struct Row {
+        var indices: [Int] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+    }
+
+    private func arrange(width: CGFloat, subviews: Subviews) -> [Row] {
+        var rows: [Row] = []
+        var current = Row()
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            let needed = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+            if needed > width, !current.indices.isEmpty {
+                rows.append(current)
+                current = Row()
+            }
+            current.width = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+            current.height = max(current.height, size.height)
+            current.indices.append(index)
+        }
+        if !current.indices.isEmpty { rows.append(current) }
+        return rows
+    }
+}
+
+/// App icon for apps; a quiet lettered tile in the category colour for sites,
+/// and for apps that are no longer installed.
 struct SubjectIcon: View {
     let bundleID: String
     var domain: String?
     var category: UsageCategory = .other
     var size: CGFloat = 28
+    /// Name used for the monogram when an app's icon is unavailable.
+    var name: String?
 
     var body: some View {
         Group {
             if let domain {
-                let letter = domain.first.map { String($0).uppercased() } ?? "?"
-                RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
-                    .fill(Theme.color(for: category).opacity(0.16))
-                    .overlay {
-                        Text(letter)
-                            .font(.system(size: size * 0.48, weight: .semibold, design: .rounded))
-                            .foregroundStyle(Theme.color(for: category))
-                    }
+                monogram(domain)
             } else if let icon = IconCache.icon(bundleID: bundleID) {
                 Image(nsImage: icon).resizable().interpolation(.high)
             } else {
-                RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
-                    .fill(Theme.track)
-                    .overlay { Image(systemName: "app").foregroundStyle(.secondary) }
+                monogram(name ?? bundleID.split(separator: ".").last.map(String.init) ?? "?")
             }
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
+    }
+
+    private func monogram(_ text: String) -> some View {
+        RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
+            .fill(Theme.color(for: category).opacity(0.16))
+            .overlay {
+                Text(text.first.map { String($0).uppercased() } ?? "?")
+                    .font(.system(size: size * 0.48, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Theme.color(for: category))
+            }
+    }
+}
+
+/// A choice among a few values (durations, session lengths). The selected
+/// pill is filled with the accent and stays legible when the window is
+/// inactive, unlike tinted system buttons.
+struct PillButtonStyle: ButtonStyle {
+    let isSelected: Bool
+    var compact = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font((compact ? Theme.Font.caption : Theme.Font.body).weight(.medium))
+            .monospacedDigit()
+            .foregroundStyle(isSelected ? Color.white : Color.primary)
+            .padding(.horizontal, compact ? Theme.Space.s : Theme.Space.m)
+            .frame(minWidth: compact ? 36 : 64, minHeight: compact ? 22 : 30)
+            .background(Capsule().fill(isSelected ? Theme.accent : Theme.track))
+            .overlay(Capsule().strokeBorder(isSelected ? Color.clear : Theme.hairline, lineWidth: 0.5))
+            .opacity(configuration.isPressed ? 0.75 : 1)
+            .contentShape(Capsule())
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -51,7 +150,7 @@ struct SectionTitle: View {
 /// A thin proportional bar; the track is always visible so zero reads as zero.
 struct ProportionBar: View {
     let fraction: Double
-    var color: Color = Theme.ember
+    var color: Color = Theme.accent
     var height: CGFloat = 4
 
     var body: some View {
@@ -73,14 +172,14 @@ struct UsageRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: Theme.Space.m) {
-            SubjectIcon(bundleID: item.bundleID, domain: item.domain, category: item.category)
+            SubjectIcon(bundleID: item.bundleID, domain: item.domain, category: item.category, name: item.title)
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
                     Text(item.title).font(Theme.Font.body.weight(.medium)).lineLimit(1)
                     if item.isDistracting {
                         Image(systemName: "hand.raised.fill")
                             .font(.system(size: 9))
-                            .foregroundStyle(Theme.ember)
+                            .foregroundStyle(Theme.accent)
                             .help("Covered by a rule")
                     }
                     Spacer(minLength: Theme.Space.s)
@@ -114,7 +213,10 @@ extension Rule {
         var parts: [String] = []
         switch response {
         case .track: parts.append("Track")
-        case .pause(let pause): parts.append("Pause \(pause.waitSeconds)s, +\(pause.escalationSeconds)s each open")
+        case .pause(let pause):
+            parts.append(
+                pause.escalationSeconds > 0
+                    ? "Pause \(pause.waitSeconds)s, +\(pause.escalationSeconds)s each open" : "Pause \(pause.waitSeconds)s")
         case .block(let block): parts.append(block.closesAutomatically ? "Block and close" : "Block")
         }
         switch schedule {

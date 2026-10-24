@@ -4,12 +4,16 @@ import SwiftUI
 /// First run: one permission, a few starting rules, a goal.
 struct SetupView: View {
     @Environment(AppModel.self) private var model
-    @State private var chosen: Set<String> = [
-        RuleTemplate.chatApps.id, RuleTemplate.minimalYouTube.id, RuleTemplate.mindfulSocial.id,
-    ]
+    @State private var chosen: Set<String> = ["essentials"]
     @State private var goal = 90
 
-    private let templates = RuleTemplate.all.filter { $0.id != RuleTemplate.blank.id }
+    private let packs = RulePack.all
+
+    /// Templates from the chosen packs, each once, in pack order.
+    private var chosenTemplates: [RuleTemplate] {
+        var seen = Set<String>()
+        return packs.filter { chosen.contains($0.id) }.flatMap(\.templates).filter { seen.insert($0.id).inserted }
+    }
 
     var body: some View {
         ScrollView {
@@ -29,7 +33,7 @@ struct SetupView: View {
                             .fixedSize(horizontal: false, vertical: true)
                         if model.isAccessibilityTrusted {
                             Label("Accessibility is on", systemImage: "checkmark.circle.fill")
-                                .foregroundStyle(Theme.color(for: .productivity))
+                                .foregroundStyle(Theme.accent)
                         } else {
                             HStack(spacing: Theme.Space.m) {
                                 Button("Open Accessibility Settings\u{2026}") { model.requestAccessibility() }
@@ -43,13 +47,13 @@ struct SetupView: View {
 
                 step(2, "Choose where to start") {
                     VStack(alignment: .leading, spacing: 0) {
-                        ForEach(templates) { template in
-                            Toggle(isOn: binding(template.id)) {
+                        ForEach(packs) { pack in
+                            Toggle(isOn: binding(pack.id)) {
                                 HStack(alignment: .top, spacing: Theme.Space.s) {
-                                    Image(systemName: template.symbol).foregroundStyle(Theme.ember).frame(width: 20)
+                                    Image(systemName: pack.symbol).foregroundStyle(Theme.accent).frame(width: 20)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(template.title).font(Theme.Font.body.weight(.medium))
-                                        Text(template.subtitle).font(Theme.Font.caption).foregroundStyle(.secondary)
+                                        Text(pack.title).font(Theme.Font.body.weight(.medium))
+                                        Text(pack.subtitle).font(Theme.Font.caption).foregroundStyle(.secondary)
                                             .fixedSize(horizontal: false, vertical: true)
                                     }
                                 }
@@ -57,8 +61,11 @@ struct SetupView: View {
                             .toggleStyle(.checkbox)
                             .padding(.vertical, 7)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            if template.id != templates.last?.id { Divider() }
+                            if pack.id != packs.last?.id { Divider() }
                         }
+                        Text("You can add more from the Library in Rules at any time.")
+                            .font(Theme.Font.caption).foregroundStyle(.secondary)
+                            .padding(.top, Theme.Space.s)
                     }
                 }
 
@@ -84,7 +91,7 @@ struct SetupView: View {
                 }
                 Spacer()
                 Button {
-                    model.completeSetup(templates: templates.filter { chosen.contains($0.id) }, goalMinutes: goal)
+                    model.completeSetup(templates: chosenTemplates, goalMinutes: goal)
                 } label: {
                     Text("Start").frame(minWidth: 120)
                 }
@@ -110,9 +117,9 @@ struct SetupView: View {
         HStack(alignment: .top, spacing: Theme.Space.m) {
             Text("\(number)")
                 .font(.system(size: 13, weight: .semibold, design: .serif))
-                .foregroundStyle(Theme.ember)
+                .foregroundStyle(Theme.accent)
                 .frame(width: 26, height: 26)
-                .background(Theme.emberSoft, in: Circle())
+                .background(Theme.accentSoft, in: Circle())
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 Text(title).font(Theme.Font.heading)
                 content()

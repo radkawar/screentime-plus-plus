@@ -107,10 +107,17 @@ public final class UsageStore: @unchecked Sendable {
         try migrate()
     }
 
+    /// `SCREENTIME_DATA_DIR` points a development or QA copy at its own data,
+    /// leaving the real history and rules untouched.
     public static func defaultURL() throws -> URL {
-        let support = try FileManager.default.url(
-            for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-        let directory = support.appendingPathComponent("Screentime++", isDirectory: true)
+        let directory: URL
+        if let override = ProcessInfo.processInfo.environment["SCREENTIME_DATA_DIR"], !override.isEmpty {
+            directory = URL(fileURLWithPath: override, isDirectory: true)
+        } else {
+            let support = try FileManager.default.url(
+                for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            directory = support.appendingPathComponent("Screentime++", isDirectory: true)
+        }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory.appendingPathComponent("usage.sqlite")
     }

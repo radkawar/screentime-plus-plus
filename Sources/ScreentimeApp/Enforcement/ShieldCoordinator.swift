@@ -87,8 +87,13 @@ final class ShieldPresentation: Identifiable {
 enum ShieldResolution: Equatable {
     case continued(minutes: Int)
     case overridden
+    /// The shielded content went away (another tab, app, or the screen locked).
     case turnedBack
+    /// The user chose a card action that walks away: close, hide, quit, go back.
+    case declined
     case closedAutomatically
+    /// Enforcement was suspended (rules paused): restore the page, grant nothing.
+    case released
 }
 
 /// Decides when the shield appears, stays and leaves, and performs the tab or
@@ -147,6 +152,12 @@ final class ShieldCoordinator {
         if active != nil { resolve(.turnedBack) }
     }
 
+    /// Lift the current shield and give back any parked tab, for example when
+    /// every rule is paused from the menu bar.
+    func release() {
+        if active != nil { resolve(.released) }
+    }
+
     /// Keep the panel aligned while the window moves.
     func windowMoved(pid: pid_t, frame: CGRect) {
         guard active?.pid == pid else { return }
@@ -170,14 +181,14 @@ final class ShieldCoordinator {
         } else {
             NSRunningApplication(processIdentifier: active.pid)?.hide()
         }
-        resolve(.turnedBack)
+        resolve(.declined)
     }
 
     /// Quit the shielded app. Apps with unsaved work still ask as usual.
     func quitApp() {
         guard let active, !active.presentation.isBrowser else { return }
         NSRunningApplication(processIdentifier: active.pid)?.terminate()
-        resolve(.turnedBack)
+        resolve(.declined)
     }
 
     func goBack() {
@@ -185,7 +196,7 @@ final class ShieldCoordinator {
         if active.presentation.isBrowser, active.originalURL == nil {
             browser.goBack(pid: active.pid)
         }
-        resolve(.turnedBack)
+        resolve(.declined)
     }
 
     // MARK: Private
@@ -244,11 +255,11 @@ final class ShieldCoordinator {
         onTrack?(nil)
 
         switch resolution {
-        case .continued, .overridden:
+        case .continued, .overridden, .released:
             if let original = active.originalURL {
                 browser.setFrontTabAddress(original.absoluteString, bundleID: active.bundleID) { _ in }
             }
-        case .turnedBack, .closedAutomatically:
+        case .turnedBack, .declined, .closedAutomatically:
             break
         }
         onResolve?(active, resolution)

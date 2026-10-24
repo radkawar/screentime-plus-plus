@@ -16,7 +16,12 @@ struct TargetComposer: View {
         var id: String { rawValue }
     }
 
-    @State private var kind: Kind = .app
+    @State private var kind: Kind
+
+    init(initialKind: Kind = .app, add: @escaping (Target) -> Void) {
+        _kind = State(initialValue: initialKind)
+        self.add = add
+    }
     @State private var apps: [InstalledApp] = []
     @State private var search = ""
     @State private var selectedApp: InstalledApp?
@@ -141,7 +146,11 @@ struct TargetComposer: View {
 
     private func example(_ pattern: String, _ meaning: String) -> some View {
         HStack(spacing: 6) {
-            Button(pattern) { self.pattern = pattern }.buttonStyle(.link).font(.caption.monospaced())
+            Button(pattern) { self.pattern = pattern }
+                .buttonStyle(.plain)
+                .font(.caption.monospaced())
+                .foregroundStyle(Theme.accent)
+                .help("Use this pattern")
             Text(meaning)
         }
     }
@@ -178,10 +187,15 @@ struct TargetComposer: View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             Picker("Category", selection: $category) {
                 ForEach(UsageCategory.allCases.filter { $0 != .other }) { category in
-                    Label(category.title, systemImage: category.symbol).tag(category)
+                    HStack(spacing: Theme.Space.s) {
+                        Image(systemName: category.symbol).frame(width: 20)
+                        Text(category.title)
+                    }
+                    .tag(category)
                 }
             }
             .pickerStyle(.radioGroup)
+            .labelsHidden()
             let sites = CategoryCatalog.domains(in: category)
             Text(
                 "Every installed app that declares itself as \(category.title.lowercased()), plus sites such as "

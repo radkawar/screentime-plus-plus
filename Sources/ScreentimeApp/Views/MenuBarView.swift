@@ -12,10 +12,10 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(Format.duration(report.distractingSeconds))
+                    Text(Format.duration(report.distractingSeconds, showSeconds: true))
                         .font(Theme.Font.display(30))
                         .monospacedDigit()
-                    Text("distracting of \(Format.duration(goal)) \u{00B7} \(Format.duration(report.totalSeconds)) total")
+                    Text("distracting \u{00B7} goal \(Format.duration(goal)) \u{00B7} \(Format.duration(report.totalSeconds)) on screen")
                         .font(Theme.Font.caption)
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
@@ -24,10 +24,14 @@ struct MenuBarView: View {
                 if model.today.streakDays > 0 {
                     Label("\(model.today.streakDays)", systemImage: "flame")
                         .font(Theme.Font.label)
-                        .foregroundStyle(Theme.ember)
+                        .foregroundStyle(Theme.accent)
                         .help("\(model.today.streakDays)-day streak")
                 }
             }
+            ProportionBar(
+                fraction: goal > 0 ? report.distractingSeconds / goal : 0,
+                color: report.distractingSeconds > goal ? Theme.caution : Theme.accent, height: 3)
+                .padding(.top, -Theme.Space.s)
             DayRibbon(segments: report.segments, day: model.now, now: model.now, height: 16, showsLabels: false)
             nowLine
             Divider()
@@ -57,7 +61,7 @@ struct MenuBarView: View {
         }
         .padding(Theme.Space.m)
         .frame(width: 320)
-        .tint(Theme.ember)
+        .tint(Theme.accent)
         .onAppear { model.reloadToday() }
     }
 
@@ -66,7 +70,7 @@ struct MenuBarView: View {
         if !model.isAccessibilityTrusted {
             Label("Needs Accessibility access", systemImage: "exclamationmark.triangle")
                 .font(Theme.Font.caption)
-                .foregroundStyle(Theme.ember)
+                .foregroundStyle(Theme.caution)
         } else if let context = model.live.context {
             let grant = model.live.evaluation.matches.lazy.compactMap { match in
                 model.runtime.grant(for: match.rule.id, at: model.now).map { (match.rule, $0) }
@@ -78,7 +82,7 @@ struct MenuBarView: View {
                 if let (rule, grant) = grant {
                     Text("\(rule.name) \u{00B7} \(Format.countdown(grant.until.timeIntervalSince(model.now))) left")
                         .font(Theme.Font.caption)
-                        .foregroundStyle(Theme.ember)
+                        .foregroundStyle(grant.kind == .override ? Theme.caution : Theme.accent)
                         .monospacedDigit()
                 } else if let match = model.live.evaluation.matches.first {
                     Text(match.rule.name).font(Theme.Font.caption).foregroundStyle(.secondary)
@@ -91,7 +95,7 @@ struct MenuBarView: View {
     private var focusControls: some View {
         if let focus = model.activeFocus {
             HStack {
-                Image(systemName: "moon.fill").foregroundStyle(Theme.ember)
+                Image(systemName: "moon.fill").foregroundStyle(Theme.accent)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(focus.title).font(Theme.Font.body.weight(.medium))
                     Text("\(Format.countdown(focus.end.timeIntervalSince(model.now))) left\(focus.isLocked ? " \u{00B7} Locked" : "")")
@@ -114,14 +118,28 @@ struct MenuBarView: View {
                 }
             }
         }
+        pauseControls
+    }
+
+    /// The safety valve: deliberate (press and hold), short, and unavailable under a lock.
+    @ViewBuilder
+    private var pauseControls: some View {
+        if let until = model.rulesPausedUntil {
+            HStack {
+                Image(systemName: "pause.circle.fill").foregroundStyle(Theme.caution)
+                Text("Rules paused until \(Format.clock(until))").font(Theme.Font.body)
+                Spacer()
+                Button("Resume") { model.resumeRules() }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
+        } else if model.canPauseRules {
+            HoldToConfirmButton(title: "Hold to pause all rules for 15 min", inset: false) { model.pauseRules(minutes: 15) }
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private func startQuickFocus(_ minutes: Int) {
-        let ids = model.configuration.rules.filter { rule in
-            if case .duringFocus = rule.schedule { return true }
-            if case .track = rule.response { return false }
-            return rule.isEnabled
-        }.map(\.id)
-        model.startFocus(minutes: minutes, ruleIDs: ids, locked: false)
+        model.startFocus(minutes: minutes, ruleIDs: model.defaultFocusRuleIDs, locked: false)
     }
 }

@@ -12,7 +12,7 @@ struct ScreentimeApp: App {
             MainShell()
                 .environment(delegate.model)
                 .frame(minWidth: 820, minHeight: 560)
-                .tint(Theme.ember)
+                .tint(Theme.accent)
         }
         .defaultSize(width: 1_060, height: 720)
         .commands {
@@ -37,16 +37,22 @@ struct ScreentimeApp: App {
 
 private struct MenuBarLabel: View {
     let model: AppModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        if let focus = model.activeFocus {
-            Label(Format.countdown(focus.end.timeIntervalSince(model.now)), systemImage: "moon.fill")
-                .labelStyle(.titleAndIcon)
-                .monospacedDigit()
-        } else {
-            Image(systemName: model.shieldPresentation == nil ? "hourglass" : "hourglass.tophalf.filled")
-                .accessibilityLabel("Screentime++")
+        Group {
+            if let focus = model.activeFocus {
+                Label(Format.countdown(focus.end.timeIntervalSince(model.now)), systemImage: "moon.fill")
+                    .labelStyle(.titleAndIcon)
+                    .monospacedDigit()
+            } else {
+                Image(systemName: model.shieldPresentation == nil ? "hourglass" : "hourglass.tophalf.filled")
+                    .accessibilityLabel("Screentime++")
+            }
         }
+        // The status item always exists, so it is where AppKit code (reopen
+        // from Finder or Spotlight) gets a way to bring the main window back.
+        .onAppear { model.openMainWindow = { openWindow(id: "main") } }
     }
 }
 
@@ -170,10 +176,11 @@ private struct SidebarStatus: View {
     }
 
     private var color: Color {
-        if !model.isAccessibilityTrusted || model.activeFocus != nil { return Theme.ember }
+        if !model.isAccessibilityTrusted { return Theme.caution }
+        if model.activeFocus != nil { return Theme.accent }
         switch model.live.status {
         case .idle, .away: return .secondary
-        default: return Theme.color(for: .productivity)
+        default: return Theme.accent
         }
     }
 }
@@ -184,6 +191,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    /// Opening Screentime++ again (Finder, Spotlight, Dock) shows the main window
+    /// even when it was closed and only the menu bar item remained.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            model.openMainWindow?()
+            NSApp.activate()
+        }
+        return true
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        #if DEBUG
+            QAGallery.presentIfRequested(model: model, updater: updater.updater)
+        #endif
+    }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let focus = model.activeFocus, focus.isLocked, !Self.isSystemShutdown else {

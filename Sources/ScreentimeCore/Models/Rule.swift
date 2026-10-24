@@ -13,6 +13,8 @@ public struct Rule: Codable, Identifiable, Hashable, Sendable {
     public var schedule: RuleSchedule
     public var response: Response
     public var limits: UsageLimits
+    /// Your own words on this rule's shield, such as "Is this important?".
+    public var message: String?
 
     public init(
         id: UUID = UUID(),
@@ -23,7 +25,8 @@ public struct Rule: Codable, Identifiable, Hashable, Sendable {
         exceptions: [Target] = [],
         schedule: RuleSchedule = .always,
         response: Response = .pause(PauseSettings()),
-        limits: UsageLimits = UsageLimits()
+        limits: UsageLimits = UsageLimits(),
+        message: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -34,6 +37,7 @@ public struct Rule: Codable, Identifiable, Hashable, Sendable {
         self.schedule = schedule
         self.response = response
         self.limits = limits
+        self.message = message
     }
 
     /// Whether any target needs page text rather than only the address and title.

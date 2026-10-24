@@ -12,6 +12,8 @@ public struct AppSettings: Codable, Hashable, Sendable {
     public var retentionDays: Int
     /// Until then, existing rules cannot be edited, disabled or deleted.
     public var rulesLockedUntil: Date?
+    /// Until then, no rule applies (the menu bar safety valve).
+    public var rulesPausedUntil: Date?
     public var hasCompletedSetup: Bool
 
     public init(

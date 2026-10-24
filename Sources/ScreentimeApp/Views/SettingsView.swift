@@ -14,11 +14,11 @@ struct SettingsView: View {
             UpdateSettings(updater: updater).tabItem { Label("Updates", systemImage: "arrow.down.circle") }
         }
         .frame(width: 520)
-        .tint(Theme.ember)
+        .tint(Theme.accent)
     }
 }
 
-private struct GeneralSettings: View {
+struct GeneralSettings: View {
     @Environment(AppModel.self) private var model
     @State private var launchesAtLogin = false
 
@@ -64,7 +64,7 @@ private struct GeneralSettings: View {
     }
 }
 
-private struct ShieldSettings: View {
+struct ShieldSettings: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
@@ -95,7 +95,7 @@ private struct ShieldSettings: View {
             Section("Permissions") {
                 LabeledContent("Accessibility") {
                     if model.isAccessibilityTrusted {
-                        Label("On", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.color(for: .productivity))
+                        Label("On", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.accent)
                     } else {
                         Button("Turn On\u{2026}") { model.requestAccessibility() }
                     }
@@ -104,16 +104,35 @@ private struct ShieldSettings: View {
                     NSWorkspace.shared.open(
                         URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!)
                 }
-                .buttonStyle(.link)
+                .buttonStyle(.borderless)
             }
         }
         .formStyle(.grouped)
     }
 }
 
-private struct LockSettings: View {
+struct LockSettings: View {
     @Environment(AppModel.self) private var model
-    @State private var confirming: Date?
+    @State private var duration: Duration = .hour
+    @State private var confirms = false
+
+    enum Duration: String, CaseIterable, Identifiable {
+        case hour = "For 1 hour"
+        case morning = "Until tomorrow morning"
+        case week = "For a week"
+        var id: String { rawValue }
+
+        var end: Date {
+            switch self {
+            case .hour: return Date().addingTimeInterval(3_600)
+            case .week: return Date().addingTimeInterval(7 * 86_400)
+            case .morning:
+                let calendar = Calendar.current
+                let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date()))!
+                return calendar.date(bySettingHour: 8, minute: 0, second: 0, of: tomorrow)!
+            }
+        }
+    }
 
     var body: some View {
         Form {
@@ -122,47 +141,34 @@ private struct LockSettings: View {
                     Label(
                         "Locked until \(until.formatted(date: .abbreviated, time: .shortened))", systemImage: "lock.fill"
                     )
-                    .foregroundStyle(Theme.ember)
-                    Text("You can still add rules. You can extend the lock, but not shorten it.")
-                        .font(Theme.Font.caption).foregroundStyle(.secondary)
-                } else {
-                    Text("Locking stops you from weakening your rules in a weak moment. Existing rules can\u{2019}t be edited, turned off or deleted until the lock ends.")
-                        .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(Theme.accent)
                 }
+                Text(
+                    "Locking stops you from weakening your rules in a weak moment. Existing rules can\u{2019}t be edited, turned off or deleted until the lock ends. You can still add rules, and extend a lock."
+                )
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(.secondary)
             }
-            Section("Lock rules") {
-                lockButton("For 1 hour", Date().addingTimeInterval(3_600))
-                lockButton("Until tomorrow morning", Self.tomorrowMorning())
-                lockButton("For a week", Date().addingTimeInterval(7 * 86_400))
+            Section {
+                Picker("Lock rules", selection: $duration) {
+                    ForEach(Duration.allCases) { Text($0.rawValue).tag($0) }
+                }
+                HStack {
+                    Spacer()
+                    Button(model.rulesLocked ? "Extend Lock\u{2026}" : "Lock Rules\u{2026}") { confirms = true }
+                }
             }
         }
         .formStyle(.grouped)
-        .confirmationDialog(
-            "Lock your rules?", isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } })
-        ) {
-            Button("Lock") {
-                if let date = confirming { model.lockRules(until: date) }
-                confirming = nil
-            }
+        .confirmationDialog("Lock your rules?", isPresented: $confirms) {
+            Button("Lock") { model.lockRules(until: duration.end) }
         } message: {
-            if let date = confirming {
-                Text("Until \(date.formatted(date: .abbreviated, time: .shortened)) there is no way to unlock early.")
-            }
+            Text("Until \(duration.end.formatted(date: .abbreviated, time: .shortened)) there is no way to unlock early.")
         }
-    }
-
-    private func lockButton(_ title: String, _ until: Date) -> some View {
-        Button(title) { confirming = until }
-    }
-
-    private static func tomorrowMorning() -> Date {
-        let calendar = Calendar.current
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date()))!
-        return calendar.date(bySettingHour: 8, minute: 0, second: 0, of: tomorrow)!
     }
 }
 
-private struct PrivacySettings: View {
+struct PrivacySettings: View {
     @Environment(AppModel.self) private var model
     @State private var confirmsDelete = false
 
@@ -187,6 +193,7 @@ private struct PrivacySettings: View {
                     Text("1 year").tag(365)
                 }
                 Button("Delete All History\u{2026}", role: .destructive) { confirmsDelete = true }
+                    .foregroundStyle(.red)
             }
         }
         .formStyle(.grouped)
@@ -198,7 +205,7 @@ private struct PrivacySettings: View {
     }
 }
 
-private struct UpdateSettings: View {
+struct UpdateSettings: View {
     let updater: SPUUpdater
     @State private var automatic = false
 

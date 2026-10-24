@@ -10,8 +10,8 @@ public struct RuleTemplate: Identifiable, Sendable {
     public var make: @Sendable () -> Rule
 
     public static let all: [RuleTemplate] = [
-        chatApps, gamesOnWeekends, distractingApps, minimalYouTube, minimalSocial, mindfulSocial, deepWork,
-        gambling, adult, blank,
+        chatApps, mindfulSocial, minimalYouTube, minimalSocial, deepWork, emailBatches, focusBlocklist, windDown,
+        slowMornings, gamesOnWeekends, distractingApps, mindfulShopping, newsDiet, gambling, adult, blank,
     ]
 
     /// Well-known chat apps; bundle IDs that are not installed simply never match.
@@ -35,7 +35,8 @@ public struct RuleTemplate: Identifiable, Sendable {
             symbol: "bubble.left.and.bubble.right",
             targets: chatAppTargets,
             response: .pause(PauseSettings(waitSeconds: 5, escalationSeconds: 3, sessionMinutes: [5, 10, 20])),
-            limits: UsageLimits(dailyOpens: 25)
+            limits: UsageLimits(dailyOpens: 25),
+            message: "Replying to someone, or just checking?"
         )
     }
 
@@ -116,7 +117,8 @@ public struct RuleTemplate: Identifiable, Sendable {
             symbol: "wind",
             targets: [.category(.social)],
             response: .pause(PauseSettings(waitSeconds: 10, escalationSeconds: 5)),
-            limits: UsageLimits(dailyMinutes: 45, dailyOpens: 12)
+            limits: UsageLimits(dailyMinutes: 45, dailyOpens: 12),
+            message: "Is this important right now?"
         )
     }
 
@@ -150,7 +152,7 @@ public struct RuleTemplate: Identifiable, Sendable {
                 .content(
                     ContentRule(
                         phrases: [
-                            "sportsbook", "casino", "online casino", "free spins", "betting odds",
+                            "sportsbook", "casino", "free spins", "betting odds",
                             "place your bet", "parlay", "roulette", "blackjack", "slot machine",
                             "jackpot", "bookmaker", "wager",
                         ],

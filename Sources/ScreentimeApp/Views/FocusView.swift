@@ -30,12 +30,7 @@ struct FocusView: View {
 
     private func seedSelection() {
         guard selected.isEmpty else { return }
-        selected = Set(
-            model.configuration.rules.filter { rule in
-                if case .duringFocus = rule.schedule { return true }
-                if case .track = rule.response { return false }
-                return rule.isEnabled
-            }.map(\.id))
+        selected = Set(model.defaultFocusRuleIDs)
     }
 
     // MARK: Running
@@ -86,17 +81,8 @@ struct FocusView: View {
                 .frame(maxWidth: 320)
             HStack(spacing: Theme.Space.s) {
                 ForEach(Self.durations, id: \.self) { value in
-                    Button {
-                        minutes = value
-                    } label: {
-                        Text(Format.minutesLabel(value))
-                            .font(Theme.Font.body.weight(.medium))
-                            .monospacedDigit()
-                            .frame(minWidth: 64, minHeight: 30)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(minutes == value ? Theme.ember : nil)
-                    .accessibilityAddTraits(minutes == value ? .isSelected : [])
+                    Button(Format.minutesLabel(value)) { minutes = value }
+                        .buttonStyle(PillButtonStyle(isSelected: minutes == value))
                 }
                 Stepper(value: $minutes, in: 5...480, step: 5) {
                     Text(Format.minutesLabel(minutes)).monospacedDigit().frame(minWidth: 52)
@@ -109,7 +95,7 @@ struct FocusView: View {
                     ForEach(model.configuration.rules) { rule in
                         Toggle(isOn: binding(rule.id)) {
                             HStack(spacing: Theme.Space.s) {
-                                Image(systemName: rule.symbol).foregroundStyle(Theme.ember).frame(width: 20)
+                                Image(systemName: rule.symbol).foregroundStyle(Theme.accent).frame(width: 20)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(rule.name)
                                     Text(rule.targetSummary).font(Theme.Font.caption).foregroundStyle(.secondary)
@@ -153,7 +139,7 @@ struct FocusView: View {
     }
 }
 
-/// Signature for Focus: one ember arc that drains as the session runs.
+/// Signature for Focus: one accent arc that drains as the session runs.
 struct FocusArc: View {
     let progress: Double
     let remaining: TimeInterval
@@ -163,7 +149,7 @@ struct FocusArc: View {
             Circle().stroke(Theme.track, style: StrokeStyle(lineWidth: 10))
             Circle()
                 .trim(from: 0, to: max(0.001, progress))
-                .stroke(Theme.ember, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                .stroke(Theme.accent, style: StrokeStyle(lineWidth: 10, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .animation(.linear(duration: 1), value: progress)
             VStack(spacing: 2) {

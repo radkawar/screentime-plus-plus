@@ -94,7 +94,7 @@ private struct RuleVerdictRow: View {
         let intervention = live.evaluation.intervention
         let isActing = intervention?.match.rule.id == rule.id
         HStack(spacing: Theme.Space.s) {
-            Image(systemName: rule.symbol).foregroundStyle(match == nil ? Color.secondary : Theme.ember).frame(width: 20)
+            Image(systemName: rule.symbol).foregroundStyle(match == nil ? Color.secondary : Theme.accent).frame(width: 20)
             VStack(alignment: .leading, spacing: 2) {
                 Text(rule.name)
                 if let match {
@@ -108,10 +108,10 @@ private struct RuleVerdictRow: View {
             if isActing, let intervention {
                 Text(verdict(intervention))
                     .font(Theme.Font.label)
-                    .foregroundStyle(Theme.ember)
+                    .foregroundStyle(Theme.accent)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(Theme.emberSoft, in: Capsule())
+                    .background(Theme.accentSoft, in: Capsule())
             } else if match != nil {
                 Text("Allowed").font(Theme.Font.label).foregroundStyle(.secondary)
             }

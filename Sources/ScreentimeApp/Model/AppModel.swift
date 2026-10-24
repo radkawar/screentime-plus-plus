@@ -126,7 +126,8 @@ final class AppModel {
                 break
             }
             let evaluation = PolicyEngine.evaluate(
-                context: context, content: sample.content, rules: configuration.rules, runtime: runtime,
+                context: context, content: sample.content, rules: rulesPausedUntil == nil ? configuration.rules : [],
+                runtime: runtime,
                 now: sample.date)
             live.evaluation = evaluation
             shields.update(intervention: evaluation.intervention, reading: reading, now: sample.date)
@@ -174,6 +175,10 @@ final class AppModel {
             config.settings.rulesLockedUntil = nil
             changed = true
         }
+        if let paused = config.settings.rulesPausedUntil, paused <= now {
+            config.settings.rulesPausedUntil = nil
+            changed = true
+        }
         if changed { commit(config) }
     }
 
@@ -212,8 +217,17 @@ final class AppModel {
             outcome = .overridden
         case .turnedBack:
             outcome = .turnedBack
+        case .declined:
+            outcome = .turnedBack
+            let count = today.turnedBack + 1
+            Toast.show(
+                title: "Turned back", detail: count == 1 ? "First time today" : "\(count) times today",
+                symbol: "arrow.uturn.backward")
         case .closedAutomatically:
             outcome = .closed
+        case .released:
+            // A global pause is a deliberate bypass, recorded like an override.
+            outcome = .overridden
         }
         if config != configuration { commit(config) }
         if let id = active.recordID {
@@ -333,13 +347,6 @@ final class AppModel {
         save(rule: updated)
     }
 
-    func moveRules(from source: IndexSet, to destination: Int) {
-        guard !rulesLocked else { return }
-        var config = configuration
-        config.rules.move(fromOffsets: source, toOffset: destination)
-        commit(config)
-    }
-
     func updateSettings(_ change: (inout AppSettings) -> Void) {
         var config = configuration
         change(&config.settings)
@@ -347,7 +354,21 @@ final class AppModel {
     }
 
     func lockRules(until date: Date) {
-        updateSettings { $0.rulesLockedUntil = max(date, $0.rulesLockedUntil ?? date) }
+        updateSettings {
+            $0.rulesLockedUntil = max(date, $0.rulesLockedUntil ?? date)
+            // A lock means rules apply: it ends any pause.
+            $0.rulesPausedUntil = nil
+        }
+    }
+
+    /// What Focus blocks unless you choose otherwise: the Focus-only rules and
+    /// every enabled pause rule. Time-of-day blocks keep their own schedule.
+    var defaultFocusRuleIDs: [UUID] {
+        configuration.rules.filter { rule in
+            if case .duringFocus = rule.schedule { return true }
+            if case .pause = rule.response { return rule.isEnabled }
+            return false
+        }.map(\.id)
     }
 
     func startFocus(minutes: Int, ruleIDs: [UUID], locked: Bool, title: String = "Focus") {
@@ -359,6 +380,8 @@ final class AppModel {
             isLocked: locked)
         // A new focus session supersedes running pause sessions for its rules.
         config.grants.removeAll { ruleIDs.contains($0.ruleID) }
+        // Choosing to focus ends any pause of the rules.
+        config.settings.rulesPausedUntil = nil
         commit(config)
     }
 
@@ -372,23 +395,40 @@ final class AppModel {
     func completeSetup(templates: [RuleTemplate], goalMinutes: Int) {
         var config = configuration
         if !config.settings.hasCompletedSetup {
-            config.rules = templates.map { $0.make() } + [Self.focusRule()]
+            let chosen = templates.map { $0.make() }
+            let hasFocusRule = chosen.contains { if case .duringFocus = $0.schedule { return true } else { return false } }
+            config.rules = chosen + (hasFocusRule ? [] : [RuleTemplate.focusBlocklist.make()])
         }
         config.settings.dailyGoalMinutes = goalMinutes
         config.settings.hasCompletedSetup = true
         commit(config)
     }
 
-    /// The rule Focus blocks by default: distracting categories, dormant otherwise.
-    static func focusRule() -> Rule {
-        Rule(
-            name: "Focus blocklist", symbol: "moon",
-            targets: [.category(.social), .category(.entertainment), .category(.shopping), .category(.games)],
-            // Music in the background is part of focusing, not a distraction from it.
-            exceptions: [
-                .app(bundleID: "com.apple.Music", name: "Music"), .app(bundleID: "com.spotify.client", name: "Spotify"),
-            ],
-            schedule: .duringFocus, response: .track)
+    /// Adds every rule in a pack, skipping ones already added from the same template name.
+    func add(pack: RulePack) {
+        var config = configuration
+        let existing = Set(config.rules.map(\.name))
+        config.rules += pack.templates.map { $0.make() }.filter { !existing.contains($0.name) }
+        commit(config)
+    }
+
+    /// Safety valve: suspend every rule for a while. Unavailable while a lock applies.
+    var canPauseRules: Bool {
+        !rulesLocked && !(activeFocus?.isLocked ?? false)
+    }
+
+    var rulesPausedUntil: Date? {
+        configuration.settings.rulesPausedUntil.flatMap { $0 > now ? $0 : nil }
+    }
+
+    func pauseRules(minutes: Int) {
+        guard canPauseRules else { return }
+        updateSettings { $0.rulesPausedUntil = Date().addingTimeInterval(TimeInterval(minutes * 60)) }
+        shields.release()
+    }
+
+    func resumeRules() {
+        updateSettings { $0.rulesPausedUntil = nil }
     }
 
     func deleteHistory() {
@@ -419,6 +459,9 @@ final class AppModel {
     var isInspectorOpen = false {
         didSet { applyMonitorConfiguration() }
     }
+
+    /// Opens the main window; provided by the always-present menu bar label.
+    @ObservationIgnored var openMainWindow: (() -> Void)?
 
     func requestAccessibility() {
         AccessibilityPermission.request()

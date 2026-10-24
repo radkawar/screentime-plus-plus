@@ -4,8 +4,12 @@ import SwiftUI
 
 /// Design tokens. See docs/DESIGN.md.
 enum Theme {
-    static let ember = Color(light: 0xC8502A, dark: 0xF0794A)
-    static let emberSoft = Color(light: 0xC8502A, dark: 0xF0794A).opacity(0.14)
+    /// Positive and primary: controls, selection, "on track", turning back.
+    static let accent = Color(light: 0x2E7D57, dark: 0x3FAE77)
+    static let accentSoft = Color(light: 0x2E7D57, dark: 0x3FAE77).opacity(0.14)
+    /// Attention without alarm: over goal, overrides, missing permission.
+    static let caution = Color(light: 0xB26B12, dark: 0xE3A040)
+    static let cautionSoft = Color(light: 0xB26B12, dark: 0xE3A040).opacity(0.14)
     static let canvas = Color(nsColor: .windowBackgroundColor)
     static let surface = Color(nsColor: .controlBackgroundColor)
     static let hairline = Color(nsColor: .separatorColor)
@@ -15,7 +19,7 @@ enum Theme {
         switch category {
         case .social: Color(light: 0xD9623F, dark: 0xEE7E5E)
         case .entertainment: Color(light: 0x9A5A86, dark: 0xC083AE)
-        case .productivity: Color(light: 0x4F8C69, dark: 0x79B892)
+        case .productivity: Color(light: 0x4A72A8, dark: 0x7FA4D6)
         case .communication: Color(light: 0x3A8592, dark: 0x66B2BE)
         case .reading: Color(light: 0xB88A2E, dark: 0xDDB25A)
         case .games: Color(light: 0xC4566F, dark: 0xE27E95)

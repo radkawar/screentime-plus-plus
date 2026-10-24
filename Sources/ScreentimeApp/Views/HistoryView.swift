@@ -78,6 +78,16 @@ struct HistoryView: View {
     private func chart(days: [DayTotal]) -> some View {
         let goal = Double(model.configuration.settings.dailyGoalMinutes) / 60
         return VStack(alignment: .leading, spacing: Theme.Space.s) {
+            HStack(spacing: 6) {
+                Spacer()
+                Capsule()
+                    .stroke(Theme.accent, style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
+                    .frame(width: 18, height: 1.5)
+                Text("Daily goal \u{00B7} \(Format.duration(goal * 3600))")
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityElement(children: .combine)
             Chart {
                 ForEach(days) { day in
                     ForEach(UsageCategory.allCases) { category in
@@ -94,11 +104,8 @@ struct HistoryView: View {
                     }
                 }
                 RuleMark(y: .value("Goal", goal))
-                    .foregroundStyle(Theme.ember)
+                    .foregroundStyle(Theme.accent)
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                    .annotation(position: .top, alignment: .trailing) {
-                        Text("Goal").font(Theme.Font.caption).foregroundStyle(Theme.ember)
-                    }
             }
             .chartForegroundStyleScale(
                 domain: UsageCategory.allCases.map(\.title),

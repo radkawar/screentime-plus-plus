@@ -30,7 +30,7 @@ struct ShieldCard: View {
             UnevenRoundedRectangle(
                 topLeadingRadius: presentation.isBrowser ? 0 : 10, bottomLeadingRadius: 10,
                 bottomTrailingRadius: 10, topTrailingRadius: presentation.isBrowser ? 0 : 10))
-        .tint(Theme.ember)
+        .tint(Theme.accent)
     }
 
     private var header: some View {
@@ -53,6 +53,9 @@ struct ShieldCard: View {
     }
 
     private var title: String {
+        if let message = presentation.rule.message?.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty {
+            return message
+        }
         if presentation.pause != nil {
             return presentation.phase == .waiting ? "Take a breath." : "Still want to go in?"
         }
@@ -76,8 +79,8 @@ struct ShieldCard: View {
         guard let block = presentation.block else { return "" }
         let evidence = evidenceLine(block.match.evidence)
         switch block.reason {
-        case .focus(let title, let until, _):
-            return "\(title) until \(Format.clock(until))"
+        case .focus(let title, let until, let locked):
+            return "\(title) until \(Format.clock(until))\(locked ? " \u{00B7} Locked" : "")"
         case .minutesLimit(let minutes):
             return "\(rule.name) allows \(Format.minutesLabel(minutes)) a day. It opens again tomorrow."
         case .opensLimit(let opens):
@@ -140,7 +143,7 @@ private struct PauseBody: View {
                 }
                 .buttonStyle(.plain)
                 .font(Theme.Font.body)
-                .foregroundStyle(Theme.ember)
+                .foregroundStyle(Theme.accent)
             }
         }
         .animation(.easeOut(duration: 0.2), value: presentation.phase)
@@ -156,35 +159,40 @@ private struct BlockBody: View {
         VStack(spacing: Theme.Space.l) {
             Image(systemName: presentation.rule.symbol)
                 .font(.system(size: 30, weight: .regular))
-                .foregroundStyle(Theme.ember)
+                .foregroundStyle(Theme.accent)
                 .frame(width: 72, height: 72)
-                .background(Theme.emberSoft, in: Circle())
+                .background(Theme.accentSoft, in: Circle())
                 .accessibilityHidden(true)
-            HStack(spacing: Theme.Space.s) {
-                if presentation.isBrowser {
-                    Button("Close Tab") { coordinator.closeTabOrHide() }
-                        .buttonStyle(ShieldButtonStyle(prominent: true))
-                        .keyboardShortcut(.defaultAction)
-                    if !presentation.isParked {
-                        Button("Go Back") { coordinator.goBack() }
+            if block.closesAutomatically {
+                HStack(spacing: Theme.Space.s) {
+                    ProgressView().controlSize(.small)
+                    Text(presentation.isBrowser ? "Closing this tab\u{2026}" : "Quitting \(presentation.appName)\u{2026}")
+                        .font(Theme.Font.body)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                HStack(spacing: Theme.Space.s) {
+                    if presentation.isBrowser {
+                        Button("Close Tab") { coordinator.closeTabOrHide() }
+                            .buttonStyle(ShieldButtonStyle(prominent: true))
+                            .keyboardShortcut(.defaultAction)
+                        if !presentation.isParked {
+                            Button("Go Back") { coordinator.goBack() }
+                                .buttonStyle(ShieldButtonStyle(prominent: false))
+                        }
+                    } else {
+                        Button("Quit \(presentation.appName)") { coordinator.quitApp() }
+                            .buttonStyle(ShieldButtonStyle(prominent: true))
+                            .keyboardShortcut(.defaultAction)
+                        Button("Hide") { coordinator.closeTabOrHide() }
                             .buttonStyle(ShieldButtonStyle(prominent: false))
                     }
-                } else {
-                    Button("Quit \(presentation.appName)") { coordinator.quitApp() }
-                        .buttonStyle(ShieldButtonStyle(prominent: true))
-                        .keyboardShortcut(.defaultAction)
-                    Button("Hide") { coordinator.closeTabOrHide() }
-                        .buttonStyle(ShieldButtonStyle(prominent: false))
                 }
-            }
-            if block.allowsOverride, !block.closesAutomatically {
-                HoldToConfirmButton(title: "Hold to allow 1 minute") {
-                    coordinator.overrideOneMinute()
+                if block.allowsOverride {
+                    HoldToConfirmButton(title: "Hold to allow 1 minute") {
+                        coordinator.overrideOneMinute()
+                    }
                 }
-            } else if block.closesAutomatically {
-                Text(presentation.isBrowser ? "Closing this tab\u{2026}" : "Quitting \(presentation.appName)\u{2026}")
-                    .font(Theme.Font.caption)
-                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -203,13 +211,13 @@ struct BreathingRing: View {
             let phase = breathPhase(timeline.date)
             ZStack {
                 Circle()
-                    .fill(Theme.emberSoft)
+                    .fill(Theme.accentSoft)
                     .scaleEffect(reduceMotion || !isWaiting ? 0.82 : 0.62 + 0.3 * phase)
                 Circle()
                     .stroke(Theme.track, lineWidth: 3)
                 Circle()
                     .trim(from: 0, to: total > 0 ? remaining / total : 0)
-                    .stroke(Theme.ember, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .stroke(Theme.accent, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 VStack(spacing: 2) {
                     if isWaiting {
@@ -223,7 +231,7 @@ struct BreathingRing: View {
                     } else {
                         Image(systemName: "checkmark")
                             .font(.system(size: 26, weight: .medium))
-                            .foregroundStyle(Theme.ember)
+                            .foregroundStyle(Theme.accent)
                     }
                 }
             }
@@ -240,11 +248,13 @@ struct BreathingRing: View {
     }
 }
 
-/// An override that has to be meant: press and hold for two seconds while a
-/// ring fills. Releasing early resets it.
+/// A bypass that has to be meant: press and hold for two seconds while a
+/// ring fills. Releasing early resets it. Amber, because it weakens a rule.
 struct HoldToConfirmButton: View {
     let title: String
     var duration: TimeInterval = 2
+    /// Pad the capsule so it reads as a standalone control; off to align with a column.
+    var inset = true
     let action: () -> Void
 
     @State private var isPressing = false
@@ -256,7 +266,7 @@ struct HoldToConfirmButton: View {
                 Circle().stroke(Theme.track, lineWidth: 2)
                 Circle()
                     .trim(from: 0, to: progress)
-                    .stroke(Theme.ember, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .stroke(Theme.caution, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                     .rotationEffect(.degrees(-90))
             }
             .frame(width: 16, height: 16)
@@ -264,7 +274,7 @@ struct HoldToConfirmButton: View {
                 .font(Theme.Font.body)
                 .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, Theme.Space.m)
+        .padding(.horizontal, inset ? Theme.Space.m : 0)
         .frame(height: 32)
         .contentShape(Capsule())
         .background(Capsule().fill(isPressing ? Theme.track : .clear))
@@ -304,7 +314,7 @@ struct ShieldCover: View {
 }
 
 /// The shield panel never becomes key, so system prominent buttons would draw
-/// in their inactive grey. This style keeps the ember fill regardless.
+/// in their inactive grey. This style keeps the accent fill regardless.
 struct ShieldButtonStyle: ButtonStyle {
     let prominent: Bool
 
@@ -315,7 +325,7 @@ struct ShieldButtonStyle: ButtonStyle {
             .padding(.horizontal, Theme.Space.m)
             .frame(minWidth: 88, minHeight: 32)
             .background(
-                Capsule().fill(prominent ? Theme.ember : Theme.track)
+                Capsule().fill(prominent ? Theme.accent : Theme.track)
             )
             .overlay(Capsule().strokeBorder(prominent ? Color.clear : Theme.hairline, lineWidth: 0.5))
             .opacity(configuration.isPressed ? 0.75 : 1)

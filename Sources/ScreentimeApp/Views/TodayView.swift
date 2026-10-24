@@ -47,7 +47,7 @@ struct TodayView: View {
                 if streak > 0 {
                     Label("\(streak)-day streak", systemImage: "flame")
                         .font(Theme.Font.label)
-                        .foregroundStyle(Theme.ember)
+                        .foregroundStyle(Theme.accent)
                         .help("Days with distracting time inside your goal and no overrides")
                 }
             }
@@ -64,7 +64,7 @@ struct TodayView: View {
             )
             .font(Theme.Font.body)
             .foregroundStyle(.secondary)
-            ProportionBar(fraction: goal > 0 ? distracting / goal : 0, color: Theme.ember, height: 5)
+            ProportionBar(fraction: goal > 0 ? distracting / goal : 0, color: over > 0 ? Theme.caution : Theme.accent, height: 5)
                 .frame(maxWidth: 360)
                 .padding(.top, Theme.Space.xs)
         }
@@ -110,7 +110,7 @@ struct TodayView: View {
                     Button(showsAllItems ? "Show fewer" : "Show all \(items.count)") {
                         withAnimation(.easeOut(duration: 0.2)) { showsAllItems.toggle() }
                     }
-                    .buttonStyle(.link)
+                    .buttonStyle(.borderless)
                     .font(Theme.Font.body)
                 }
             }
@@ -177,10 +177,10 @@ struct InterventionRow: View {
         let (text, symbol, color): (String, String, Color) =
             switch record.outcome {
             case .shown: ("Shown", "eye", .secondary)
-            case .turnedBack: ("Turned back", "arrow.uturn.backward", Theme.color(for: .productivity))
+            case .turnedBack: ("Turned back", "arrow.uturn.backward", Theme.accent)
             case .continued: ("Continued", "arrow.right", .secondary)
-            case .overridden: ("Overrode", "exclamationmark.circle", Theme.ember)
-            case .closed: ("Closed", "xmark.circle", Theme.color(for: .productivity))
+            case .overridden: ("Overrode", "exclamationmark.circle", Theme.caution)
+            case .closed: ("Closed", "xmark.circle", Theme.accent)
             }
         return Label(text, systemImage: symbol)
             .font(Theme.Font.caption)
@@ -195,7 +195,7 @@ struct PermissionCallout: View {
         HStack(alignment: .top, spacing: Theme.Space.m) {
             Image(systemName: "lock.shield")
                 .font(.system(size: 20))
-                .foregroundStyle(Theme.ember)
+                .foregroundStyle(Theme.caution)
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 Text("Accessibility access is off").font(Theme.Font.heading)
                 Text(
@@ -210,6 +210,6 @@ struct PermissionCallout: View {
                 .buttonStyle(.borderedProminent)
         }
         .padding(Theme.Space.m)
-        .background(Theme.emberSoft, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+        .background(Theme.cautionSoft, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
     }
 }

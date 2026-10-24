@@ -49,7 +49,7 @@ func render(pixels: Int) -> Data {
     context.strokePath()
     // Ember arc: most of the day used, a gap left open.
     context.setLineCap(.round)
-    context.setStrokeColor(color(0xF0794A))
+    context.setStrokeColor(color(0x3FAE77))
     let start = CGFloat.pi / 2
     context.addArc(center: center, radius: radius, startAngle: start, endAngle: start - .pi * 2 * 0.72, clockwise: true)
     context.strokePath()

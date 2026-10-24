@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Signature detail for Today: one 24-hour band. Each stretch of use is drawn
 /// in its category colour; distracting time is solid, everything else is
-/// lighter, and an ember tick marks now. Hover to read a stretch.
+/// lighter, and an accent tick marks now. Hover to read a stretch.
 struct DayRibbon: View {
     let segments: [Segment]
     let day: Date
@@ -98,7 +98,7 @@ struct DayRibbon: View {
 
         if Calendar.current.isDate(now, inSameDayAs: day) {
             let nx = x(for: now, width: size.width)
-            context.fill(Path(CGRect(x: nx - 1, y: 0, width: 2, height: size.height)), with: .color(Theme.ember))
+            context.fill(Path(CGRect(x: nx - 1, y: 0, width: 2, height: size.height)), with: .color(Theme.accent))
         }
     }
 

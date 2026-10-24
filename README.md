@@ -28,11 +28,15 @@ through macOS Accessibility, and everything is decided on this Mac.
 ## Highlights
 
 - Apps and websites are first-class: block, pause or limit either.
+- A Library of curated packs (Essentials, Deep Work, Evenings and Mornings,
+  Minimal Social, Games and Streaming, Spending and News, Safety), each added in
+  one click and fully editable.
 - Page rules such as `youtube.com/shorts/*` or `reddit.com/` (front page only).
 - Phrase rules that read the page or window text, optionally inside one app.
 - Categories cover every installed app by the category it declares, plus known sites.
 - Three responses: **Track** (count only), **Pause** (wait, intention, timed
-  session), **Block** (shield, with an optional deliberate override).
+  session), **Block** (shield, with an optional deliberate override). Each rule
+  can carry your own words for its shield, such as "Is this important right now?".
 - Daily time and open limits, weekly schedules (overnight aware), and exceptions.
 - Focus sessions that block chosen rules, optionally locked until they end.
 - Lock your rules until a time, so they can be tightened but not weakened.
@@ -41,7 +45,8 @@ through macOS Accessibility, and everything is decided on this Mac.
 - History: 7 and 30 day charts by category, and time per site surface
   ("YouTube: Shorts 41m, Watch 22m").
 - Inspector: what the engine sees right now and what each rule decides.
-- Menu bar: today at a glance and one-click Focus.
+- Menu bar: today against your goal, one-click Focus, and a press-and-hold
+  safety valve that pauses every rule for 15 minutes (unavailable while locked).
 
 ## Install
 
