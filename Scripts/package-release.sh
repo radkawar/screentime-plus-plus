@@ -222,7 +222,8 @@ APP="$STAGE/Screentime++.app"
 # Validate every Mach-O, including Sparkle helper executables, before signing.
 while IFS= read -r -d '' binary; do
   if /usr/bin/file -b "$binary" | /usr/bin/grep -q 'Mach-O'; then
-    lipo -verify_arch arm64 x86_64 "$binary"
+    # Xcode 27's lipo accepts a single architecture per -verify_arch.
+    for arch in arm64 x86_64; do lipo "$binary" -verify_arch "$arch"; done
   fi
 done < <(find "$APP" -type f -print0)
 ARCHIVE_TIMESTAMP="$(/bin/date -r "$SOURCE_EPOCH" '+%Y%m%d%H%M.%S')"
