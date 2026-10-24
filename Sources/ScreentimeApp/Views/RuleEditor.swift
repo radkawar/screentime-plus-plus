@@ -276,7 +276,7 @@ struct RuleEditor: View {
         let binding = Binding<BlockSettings>(get: { settings }, set: { rule.response = .block($0) })
         return Group {
             Toggle("Allow a one-minute override (press and hold)", isOn: binding.allowsOverride)
-            Toggle("Close the tab or hide the app automatically", isOn: binding.closesAutomatically)
+            Toggle("Close the tab or quit the app automatically", isOn: binding.closesAutomatically)
         }
     }
 
@@ -380,10 +380,17 @@ private struct TargetRows: View {
         case .app: "App"
         case .website: "Website and its subdomains"
         case .urlPattern: "Page"
-        case .category(let category): "\(CategoryCatalog.domains(in: category).count) known sites and apps"
+        case .category: "Installed apps in this category, and known sites"
         case .content(let rule):
-            "\(rule.scope == .pageText ? "Page text" : "Title and address") \u{00B7} at least \(rule.minimumMatches) mention\(rule.minimumMatches == 1 ? "" : "s")"
+            "\(rule.scope == .pageText ? "Text" : "Title and address") \u{00B7} at least \(rule.minimumMatches) mention\(rule.minimumMatches == 1 ? "" : "s")"
+                + (rule.apps.isEmpty ? " \u{00B7} any app" : " \u{00B7} in \(rule.apps.map(Self.appName).joined(separator: ", "))")
         }
+    }
+
+    private static func appName(_ bundleID: String) -> String {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
+            .map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") }
+            ?? bundleID
     }
 }
 

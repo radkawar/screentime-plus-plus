@@ -59,7 +59,7 @@ public enum Target: Codable, Hashable, Sendable, Identifiable {
         case .website(let domain): "site:\(domain)"
         case .urlPattern(let pattern): "url:\(pattern)"
         case .content(let rule):
-            "content:\(rule.phrases.joined(separator: "|")):\(rule.minimumMatches):\(rule.scope.rawValue)"
+            "content:\(rule.phrases.joined(separator: "|")):\(rule.minimumMatches):\(rule.scope.rawValue):\(rule.apps.joined(separator: ","))"
         case .category(let category): "category:\(category.rawValue)"
         }
     }
@@ -107,18 +107,31 @@ public enum ContentScope: String, Codable, Sendable, CaseIterable {
     case pageText
 }
 
-/// Phrases searched in the focused page. Matching is case- and
+/// Phrases searched in the focused page or app window. Matching is case- and
 /// diacritic-insensitive and respects word boundaries.
 public struct ContentRule: Codable, Hashable, Sendable {
     public var phrases: [String]
     /// Total occurrences, across all phrases, needed to match.
     public var minimumMatches: Int
     public var scope: ContentScope
+    /// Only inside these apps (bundle IDs). Empty means every app and browser.
+    public var apps: [String]
 
-    public init(phrases: [String], minimumMatches: Int = 1, scope: ContentScope = .pageText) {
+    public init(
+        phrases: [String], minimumMatches: Int = 1, scope: ContentScope = .pageText, apps: [String] = []
+    ) {
         self.phrases = phrases
         self.minimumMatches = max(1, minimumMatches)
         self.scope = scope
+        self.apps = apps
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        phrases = try container.decode([String].self, forKey: .phrases)
+        minimumMatches = try container.decode(Int.self, forKey: .minimumMatches)
+        scope = try container.decode(ContentScope.self, forKey: .scope)
+        apps = try container.decodeIfPresent([String].self, forKey: .apps) ?? []
     }
 
     public var summary: String {

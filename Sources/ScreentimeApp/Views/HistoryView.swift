@@ -68,7 +68,7 @@ struct HistoryView: View {
             Text(
                 active.isEmpty
                     ? "No recorded days in this range yet."
-                    : "distracting per day. \(withinGoal) of \(active.count) days inside your \(Format.duration(goal)) goal."
+                    : "distracting per day. \(withinGoal) of \(active.count) day\(active.count == 1 ? "" : "s") inside your \(Format.duration(goal)) goal."
             )
             .font(Theme.Font.body)
             .foregroundStyle(.secondary)
@@ -112,9 +112,12 @@ struct HistoryView: View {
             .chartYAxis {
                 AxisMarks(position: .leading) { value in
                     AxisGridLine().foregroundStyle(Theme.hairline)
-                    AxisValueLabel { if let hours = value.as(Double.self) { Text("\(Int(hours))h") } }
+                    AxisValueLabel {
+                        if let hours = value.as(Double.self) { Text(Format.duration(hours * 3600)) }
+                    }
                 }
             }
+            .chartXScale(domain: chartDomain(days))
             .chartXSelection(value: $selectedDay)
             .chartLegend(position: .bottom, alignment: .leading, spacing: Theme.Space.m)
             .frame(height: 240)
@@ -127,6 +130,14 @@ struct HistoryView: View {
                 .monospacedDigit()
             }
         }
+    }
+
+    /// The whole range, so a single recorded day is one bar among empty days.
+    private func chartDomain(_ days: [DayTotal]) -> ClosedRange<Date> {
+        let calendar = Calendar.current
+        let first = days.first?.day ?? calendar.startOfDay(for: Date())
+        let last = days.last?.day ?? first
+        return first...(calendar.date(byAdding: .day, value: 1, to: last) ?? last)
     }
 
     private func breakdown(_ report: UsageReport) -> some View {

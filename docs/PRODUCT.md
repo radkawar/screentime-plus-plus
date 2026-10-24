@@ -2,15 +2,23 @@
 
 ## Thesis
 
-On a Mac, distraction rarely lives in a whole app. It lives *inside* a site:
-YouTube Shorts but not the conference talk, the Reddit front page but not the
-thread you searched for, the X timeline but not the DM. Existing Mac blockers
-work on domains, so they are either too blunt to keep on or too weak to help.
+Screentime++ controls **apps and websites equally**, and then goes one level
+deeper than either: what is *inside* them.
 
-Screentime++ reads what is actually on screen (address, path, title and page
-text through Accessibility) and answers with the lightest intervention that
-works: a pause, a short session, or a wall. Everything is decided and kept on
-this Mac.
+- Apps: block, pause or limit any app; categories cover every installed app by
+  the category it declares (every game, not a fixed list). A shielded app is
+  covered on every window it has, and strict rules quit it.
+- Websites: block, pause or limit by domain, by page path, or by surface.
+- Inside both: YouTube Shorts but not the conference talk, the Reddit front
+  page but not the thread you searched for, `#random` in Slack but not your
+  team channel, the Steam store but not your library, any page that talks
+  about betting.
+
+Existing Mac blockers work on whole apps or whole domains, so they are either
+too blunt to keep on or too weak to help. Screentime++ reads what is actually
+on screen (app, window title, address, path and visible text through
+Accessibility) and answers with the lightest intervention that works: a pause,
+a short session, or a wall. Everything is decided and kept on this Mac.
 
 ## Lessons taken from ScreenZen
 

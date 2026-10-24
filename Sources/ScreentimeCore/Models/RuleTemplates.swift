@@ -10,8 +10,65 @@ public struct RuleTemplate: Identifiable, Sendable {
     public var make: @Sendable () -> Rule
 
     public static let all: [RuleTemplate] = [
-        minimalYouTube, minimalSocial, mindfulSocial, deepWork, gambling, adult, blank,
+        chatApps, gamesOnWeekends, distractingApps, minimalYouTube, minimalSocial, mindfulSocial, deepWork,
+        gambling, adult, blank,
     ]
+
+    /// Well-known chat apps; bundle IDs that are not installed simply never match.
+    public static let chatAppTargets: [Target] = [
+        .app(bundleID: "com.tinyspeck.slackmacgap", name: "Slack"),
+        .app(bundleID: "com.hnc.Discord", name: "Discord"),
+        .app(bundleID: "com.apple.MobileSMS", name: "Messages"),
+        .app(bundleID: "net.whatsapp.WhatsApp", name: "WhatsApp"),
+        .app(bundleID: "ru.keepcoder.Telegram", name: "Telegram"),
+        .app(bundleID: "com.microsoft.teams2", name: "Microsoft Teams"),
+    ]
+
+    public static let chatApps = RuleTemplate(
+        id: "chat-apps",
+        title: "Pause before chat apps",
+        subtitle: "Slack, Discord, Messages, WhatsApp and Telegram open after a short pause, in sessions you choose.",
+        symbol: "bubble.left.and.bubble.right"
+    ) {
+        Rule(
+            name: "Chat apps",
+            symbol: "bubble.left.and.bubble.right",
+            targets: chatAppTargets,
+            response: .pause(PauseSettings(waitSeconds: 5, escalationSeconds: 3, sessionMinutes: [5, 10, 20])),
+            limits: UsageLimits(dailyOpens: 25)
+        )
+    }
+
+    public static let gamesOnWeekends = RuleTemplate(
+        id: "games-weekends",
+        title: "Games on weekends only",
+        subtitle: "Every installed game, and game sites, are blocked Monday to Friday.",
+        symbol: "gamecontroller"
+    ) {
+        Rule(
+            name: "Games on weekends",
+            symbol: "gamecontroller",
+            targets: [.category(.games)],
+            schedule: .windows([ScheduleWindow(weekdays: ScheduleWindow.workdays, startMinute: 0, endMinute: 0)]),
+            response: .block(BlockSettings(allowsOverride: false, closesAutomatically: true))
+        )
+    }
+
+    public static let distractingApps = RuleTemplate(
+        id: "distracting-apps",
+        title: "Limit entertainment apps",
+        subtitle: "Video, streaming and social apps and sites share 45 minutes a day, then they\u{2019}re blocked. Music players are exempt.",
+        symbol: "play.tv"
+    ) {
+        Rule(
+            name: "Entertainment apps",
+            symbol: "play.tv",
+            targets: [.category(.entertainment), .category(.social)],
+            exceptions: [.app(bundleID: "com.apple.Music", name: "Music"), .app(bundleID: "com.spotify.client", name: "Spotify")],
+            response: .track,
+            limits: UsageLimits(dailyMinutes: 45)
+        )
+    }
 
     public static let minimalYouTube = RuleTemplate(
         id: "minimal-youtube",

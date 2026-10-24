@@ -4,7 +4,9 @@ import SwiftUI
 /// First run: one permission, a few starting rules, a goal.
 struct SetupView: View {
     @Environment(AppModel.self) private var model
-    @State private var chosen: Set<String> = [RuleTemplate.minimalYouTube.id, RuleTemplate.mindfulSocial.id]
+    @State private var chosen: Set<String> = [
+        RuleTemplate.chatApps.id, RuleTemplate.minimalYouTube.id, RuleTemplate.mindfulSocial.id,
+    ]
     @State private var goal = 90
 
     private let templates = RuleTemplate.all.filter { $0.id != RuleTemplate.blank.id }
@@ -14,7 +16,7 @@ struct SetupView: View {
             VStack(alignment: .leading, spacing: Theme.Space.xl) {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
                     Text("Screentime++").font(Theme.Font.display(52))
-                    Text("Measures where your time goes and stands in front of the parts of the web you\u{2019}d rather skip: a page, a feed, a phrase, not just a whole site.")
+                    Text("Measures where your time goes, and stands in front of the apps, sites, and things inside them you\u{2019}d rather skip: a game, a chat app, a feed, a channel, a phrase.")
                         .font(.system(size: 15))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -40,7 +42,7 @@ struct SetupView: View {
                 }
 
                 step(2, "Choose where to start") {
-                    VStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 0) {
                         ForEach(templates) { template in
                             Toggle(isOn: binding(template.id)) {
                                 HStack(alignment: .top, spacing: Theme.Space.s) {
@@ -54,6 +56,7 @@ struct SetupView: View {
                             }
                             .toggleStyle(.checkbox)
                             .padding(.vertical, 7)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             if template.id != templates.last?.id { Divider() }
                         }
                     }
@@ -68,23 +71,32 @@ struct SetupView: View {
                         .fixedSize()
                     }
                 }
-
-                HStack {
-                    Spacer()
-                    Button {
-                        model.completeSetup(templates: templates.filter { chosen.contains($0.id) }, goalMinutes: goal)
-                    } label: {
-                        Text("Start").frame(minWidth: 120)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .keyboardShortcut(.defaultAction)
-                }
             }
             .padding(Theme.Space.xxl)
             .frame(maxWidth: 640, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
+        .safeAreaInset(edge: .bottom) {
+            HStack {
+                if !model.isAccessibilityTrusted {
+                    Text("Rules start working once Accessibility is on.")
+                        .font(Theme.Font.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button {
+                    model.completeSetup(templates: templates.filter { chosen.contains($0.id) }, goalMinutes: goal)
+                } label: {
+                    Text("Start").frame(minWidth: 120)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .keyboardShortcut(.defaultAction)
+            }
+            .padding(.horizontal, Theme.Space.xl)
+            .padding(.vertical, Theme.Space.m)
+            .background(.bar)
+        }
+        .toolbar(removing: .title)
         .task {
             // Notice the permission as soon as it is granted in System Settings.
             while !Task.isCancelled, !model.isAccessibilityTrusted {

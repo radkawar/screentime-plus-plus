@@ -173,6 +173,13 @@ final class ShieldCoordinator {
         resolve(.turnedBack)
     }
 
+    /// Quit the shielded app. Apps with unsaved work still ask as usual.
+    func quitApp() {
+        guard let active, !active.presentation.isBrowser else { return }
+        NSRunningApplication(processIdentifier: active.pid)?.terminate()
+        resolve(.turnedBack)
+    }
+
     func goBack() {
         guard let active else { return }
         if active.presentation.isBrowser, active.originalURL == nil {
@@ -206,8 +213,11 @@ final class ShieldCoordinator {
 
         window.show(
             ShieldCard(presentation: presentation, coordinator: self),
-            windowFrame: reading.windowFrame, contentFrame: reading.contentFrame)
-        onTrack?(context.pid)
+            cover: ShieldCover(ruleName: intervention.match.rule.name, symbol: intervention.match.rule.symbol),
+            windowFrame: reading.windowFrame, contentFrame: reading.contentFrame,
+            appPID: context.isBrowser ? nil : context.pid)
+        // Browsers track the focused window through AX; apps through the window server.
+        onTrack?(context.isBrowser ? context.pid : nil)
         presentation.startClock()
 
         if case .block(let block) = intervention, block.closesAutomatically {
@@ -217,7 +227,7 @@ final class ShieldCoordinator {
                 if presentation.isBrowser {
                     self.browser.closeTab(pid: context.pid)
                 } else {
-                    NSRunningApplication(processIdentifier: context.pid)?.hide()
+                    NSRunningApplication(processIdentifier: context.pid)?.terminate()
                 }
                 self.resolve(.closedAutomatically)
             }

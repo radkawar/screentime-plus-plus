@@ -161,6 +161,11 @@ public final class ActivityMonitor: @unchecked Sendable {
         } else if let app = NSWorkspace.shared.frontmostApplication {
             if app.processIdentifier == getpid() {
                 state = .own
+            } else if let id = app.bundleIdentifier, Self.awayBundleIDs.contains(id) {
+                state = .away
+            } else if let id = app.bundleIdentifier, Self.transientBundleIDs.contains(id) {
+                // A permission prompt over the shielded app: not use, and not leaving.
+                state = .idle
             } else if isIdle(frontmostPID: app.processIdentifier) {
                 state = .idle
             } else {
@@ -206,4 +211,15 @@ public final class ActivityMonitor: @unchecked Sendable {
         else { return false }
         return (values["PreventUserIdleDisplaySleep"]?.intValue ?? 0) > 0
     }
+
+    /// Frontmost while the Mac is locked or the screen saver runs; not use.
+    static let awayBundleIDs: Set<String> = [
+        "com.apple.loginwindow", "com.apple.ScreenSaver.Engine", "com.apple.screensaver",
+    ]
+
+    /// System prompts that briefly take the foreground on top of the user's app.
+    static let transientBundleIDs: Set<String> = [
+        "com.apple.accessibility.universalAccessAuthWarn", "com.apple.UserNotificationCenter",
+        "com.apple.coreservices.uiagent", "com.apple.SecurityAgent",
+    ]
 }

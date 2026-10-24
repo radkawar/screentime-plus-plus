@@ -36,6 +36,7 @@
 		82DA65244A72265CE7A6B6A3 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 780743601184416537E924DF /* AppModel.swift */; };
 		88D6F309A3D3F6DEA38EC0AC /* AppKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F9C47744E23FE11752A9B65 /* AppKit.framework */; };
 		8DE3A84B3BFF948E7EB6D089 /* UsageTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7015FA836E66F9A11CADE475 /* UsageTracker.swift */; };
+		90D6403DEFD34288D7440EEE /* DeclaredAppCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5606A7E73E674EA366EC4D1 /* DeclaredAppCategory.swift */; };
 		945FAABDC950290794ED6C5C /* ShieldCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20E3202422BAA9F7FA452CEF /* ShieldCard.swift */; };
 		9BD906F82F36D188895D07C0 /* Matchers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FFE0E69A85BF656767FA5D7 /* Matchers.swift */; };
 		A8A7DB479DD3AE95620E8958 /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAAECDEC89BE32D4ED5AEC15 /* TodayView.swift */; };
@@ -112,6 +113,7 @@
 		D788E1D361CCD9316F009B62 /* RuleEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleEditor.swift; sourceTree = "<group>"; };
 		E7E2443F57E776EEF27AB6D0 /* Observation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Observation.swift; sourceTree = "<group>"; };
 		F24F432EC94463D1399814AB /* UsageCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageCategory.swift; sourceTree = "<group>"; };
+		F5606A7E73E674EA366EC4D1 /* DeclaredAppCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeclaredAppCategory.swift; sourceTree = "<group>"; };
 		F77201C0EB8D69AA788B9CBD /* ScheduleEvaluator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleEvaluator.swift; sourceTree = "<group>"; };
 		F8B99D5A3030C03A4306E656 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -179,6 +181,7 @@
 			isa = PBXGroup;
 			children = (
 				99F8AB26C292417AEB9C6CC6 /* BrowserCatalog.swift */,
+				F5606A7E73E674EA366EC4D1 /* DeclaredAppCategory.swift */,
 				E7E2443F57E776EEF27AB6D0 /* Observation.swift */,
 				A5495393508AB35719050BA1 /* Rule.swift */,
 				66F14266E9B92B23FE1EB248 /* RuleTemplates.swift */,
@@ -449,6 +452,7 @@
 				50CCAAFC529A7A097BB64A13 /* ActivityMonitor.swift in Sources */,
 				79FFD1CF461E063B681A7081 /* BrowserCatalog.swift in Sources */,
 				0C80052E1432244DDE0ECA70 /* ConfigStore.swift in Sources */,
+				90D6403DEFD34288D7440EEE /* DeclaredAppCategory.swift in Sources */,
 				F7FB140BEB46123B88947438 /* ForegroundReader.swift in Sources */,
 				9BD906F82F36D188895D07C0 /* Matchers.swift in Sources */,
 				7DED908AF2C36BE246C053C1 /* Observation.swift in Sources */,

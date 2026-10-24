@@ -243,6 +243,7 @@ public enum PolicyEngine {
         case .category(let category):
             return context.category == category ? .category(category) : nil
         case .content(let rule):
+            guard rule.apps.isEmpty || rule.apps.contains(context.bundleID) else { return nil }
             var counts: [PhraseCount] = []
             var total = 0
             for phrase in rule.phrases {

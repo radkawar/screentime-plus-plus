@@ -1,10 +1,10 @@
 import AppKit
 import SwiftUI
 
-/// Borderless, non-activating panel drawn exactly over the offending window
+/// Borderless, non-activating panel drawn exactly over an offending window
 /// (or the page area of a browser window). It can take keyboard focus for the
-/// intention field without activating Screentime++, so the browser stays the
-/// frontmost app and focus-driven show/hide loops are impossible.
+/// intention field without activating Screentime++, so the shielded app stays
+/// frontmost and focus-driven show/hide loops are impossible.
 final class ShieldPanel: NSPanel {
     init() {
         super.init(
@@ -18,24 +18,35 @@ final class ShieldPanel: NSPanel {
         isReleasedWhenClosed = false
         becomesKeyOnlyIfNeeded = true
         animationBehavior = .none
-        collectionBehavior = [.fullScreenAuxiliary, .ignoresCycle, .transient]
+        // Join whatever Space the shielded window is on, including full-screen ones.
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle, .stationary]
     }
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 }
 
+/// Places the shield card, and for apps, plain covers over every other window
+/// the app has on screen, so a second window is not a way around a rule.
 @MainActor
 final class ShieldWindowController {
     private let panel = ShieldPanel()
     private var hosting: NSHostingView<AnyView>?
+    private var covers: [ShieldPanel] = []
+    private var coverContent: AnyView = AnyView(EmptyView())
     /// Offsets of the covered area inside the tracked window, in points.
     private var insets = NSEdgeInsets()
+    /// Set when shielding a whole app: its windows are followed via the window server.
+    private var appPID: pid_t?
+    private var appTimer: Timer?
 
     var isVisible: Bool { panel.isVisible }
 
-    func show<Content: View>(_ content: Content, windowFrame: CGRect?, contentFrame: CGRect?) {
-        let root = AnyView(content)
+    /// Show the card. Pass `appPID` to shield every window of a non-browser app.
+    func show<Card: View, Cover: View>(
+        _ card: Card, cover: Cover, windowFrame: CGRect?, contentFrame: CGRect?, appPID: pid_t?
+    ) {
+        let root = AnyView(card)
         if let hosting {
             hosting.rootView = root
         } else {
@@ -44,21 +55,34 @@ final class ShieldWindowController {
             panel.contentView = view
             hosting = view
         }
+        coverContent = AnyView(cover)
         insets = Self.insets(window: windowFrame, content: contentFrame)
+        self.appPID = appPID
         if let windowFrame {
             apply(windowFrame: windowFrame)
         } else if let screen = NSScreen.main {
             panel.setFrame(screen.visibleFrame, display: false)
         }
-        guard !panel.isVisible else { return }
-        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        panel.alphaValue = reduceMotion ? 1 : 0
-        panel.orderFrontRegardless()
-        if !reduceMotion {
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.18
-                panel.animator().alphaValue = 1
+        if !panel.isVisible {
+            let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            panel.alphaValue = reduceMotion ? 1 : 0
+            panel.orderFrontRegardless()
+            if !reduceMotion {
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.18
+                    panel.animator().alphaValue = 1
+                }
             }
+        }
+        appTimer?.invalidate()
+        appTimer = nil
+        if appPID != nil {
+            refreshAppWindows()
+            let timer = Timer(timeInterval: 1.0 / 20, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshAppWindows() }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            appTimer = timer
         }
     }
 
@@ -76,9 +100,56 @@ final class ShieldWindowController {
     }
 
     func hide() {
+        appTimer?.invalidate()
+        appTimer = nil
+        appPID = nil
+        for cover in covers { cover.orderOut(nil) }
+        covers.removeAll()
         guard panel.isVisible else { return }
         panel.orderOut(nil)
         hosting?.rootView = AnyView(EmptyView())
+    }
+
+    /// The frontmost window of the app carries the card; the rest get covers.
+    private func refreshAppWindows() {
+        guard let appPID else { return }
+        let frames = Self.windowFrames(pid: appPID)
+        if let front = frames.first { apply(windowFrame: front) }
+        let others = Array(frames.dropFirst())
+        while covers.count < others.count {
+            let cover = ShieldPanel()
+            cover.contentView = NSHostingView(rootView: coverContent)
+            covers.append(cover)
+        }
+        for (index, cover) in covers.enumerated() {
+            if index < others.count {
+                let frame = Self.cocoaRect(fromAX: others[index])
+                if cover.frame != frame { cover.setFrame(frame, display: true) }
+                if !cover.isVisible { cover.orderFrontRegardless() }
+            } else if cover.isVisible {
+                cover.orderOut(nil)
+            }
+        }
+        // Keep the card above the covers.
+        panel.orderFrontRegardless()
+    }
+
+    /// On-screen, normal-level windows of `pid`, front to back, in global
+    /// top-left coordinates (the same space as Accessibility).
+    static func windowFrames(pid: pid_t) -> [CGRect] {
+        guard
+            let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+                as? [[String: Any]]
+        else { return [] }
+        return list.compactMap { info in
+            guard (info[kCGWindowOwnerPID as String] as? pid_t) == pid,
+                (info[kCGWindowLayer as String] as? Int) == 0,
+                let bounds = info[kCGWindowBounds as String] as? NSDictionary,
+                let rect = CGRect(dictionaryRepresentation: bounds),
+                rect.width >= 80, rect.height >= 60
+            else { return nil }
+            return rect
+        }
     }
 
     /// Cover the page area only when it is a sensible size, so the address bar
@@ -92,7 +163,7 @@ final class ShieldWindowController {
             bottom: window.maxY - content.maxY, right: window.maxX - content.maxX)
     }
 
-    /// AX uses a top-left origin on the primary display; AppKit uses bottom-left.
+    /// AX and the window server use a top-left origin on the primary display; AppKit uses bottom-left.
     static func cocoaRect(fromAX rect: CGRect) -> CGRect {
         let primaryHeight = NSScreen.screens.first?.frame.maxY ?? 0
         return CGRect(x: rect.minX, y: primaryHeight - rect.maxY, width: rect.width, height: rect.height)

@@ -16,7 +16,7 @@ struct TargetComposer: View {
         var id: String { rawValue }
     }
 
-    @State private var kind: Kind = .website
+    @State private var kind: Kind = .app
     @State private var apps: [InstalledApp] = []
     @State private var search = ""
     @State private var selectedApp: InstalledApp?
@@ -26,6 +26,7 @@ struct TargetComposer: View {
     @State private var minimumMatches = 2
     @State private var scope: ContentScope = .pageText
     @State private var category: UsageCategory = .social
+    @State private var phraseApp: String = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
@@ -77,7 +78,12 @@ struct TargetComposer: View {
             return trimmed.contains(".") && !trimmed.contains(" ") ? .urlPattern(trimmed) : nil
         case .phrases:
             let list = phraseList
-            return list.isEmpty ? nil : .content(ContentRule(phrases: list, minimumMatches: minimumMatches, scope: scope))
+            return list.isEmpty
+                ? nil
+                : .content(
+                    ContentRule(
+                        phrases: list, minimumMatches: minimumMatches, scope: scope,
+                        apps: phraseApp.isEmpty ? [] : [phraseApp]))
         case .category:
             return .category(category)
         }
@@ -148,12 +154,19 @@ struct TargetComposer: View {
             Stepper(value: $minimumMatches, in: 1...50) {
                 Text("Match after \(minimumMatches) mention\(minimumMatches == 1 ? "" : "s") in total").monospacedDigit()
             }
-            Picker("Look in", selection: $scope) {
-                Text("Page text, title and address").tag(ContentScope.pageText)
+            Picker("In", selection: $phraseApp) {
+                Text("Any app or browser").tag("")
+                Divider()
+                ForEach(apps) { app in
+                    Text(app.name).tag(app.bundleID)
+                }
+            }
+            Picker("Look at", selection: $scope) {
+                Text("Text, title and address").tag(ContentScope.pageText)
                 Text("Title and address only").tag(ContentScope.titleAndAddress)
             }
             Text(
-                "Whole words, ignoring case and accents. Page text is read on this Mac, checked, and discarded; it is never saved."
+                "Works in apps too: a Slack channel, a Discord server or a Steam page shows up in the window title and text. Whole words, ignoring case and accents. Text is read on this Mac, checked, and discarded; it is never saved."
             )
             .font(Theme.Font.caption)
             .foregroundStyle(.secondary)
@@ -170,7 +183,10 @@ struct TargetComposer: View {
             }
             .pickerStyle(.radioGroup)
             let sites = CategoryCatalog.domains(in: category)
-            Text(sites.prefix(8).joined(separator: ", ") + (sites.count > 8 ? ", and \(sites.count - 8) more" : ""))
+            Text(
+                "Every installed app that declares itself as \(category.title.lowercased()), plus sites such as "
+                    + sites.prefix(6).joined(separator: ", ") + (sites.count > 6 ? " and \(sites.count - 6) more." : ".")
+            )
                 .font(Theme.Font.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

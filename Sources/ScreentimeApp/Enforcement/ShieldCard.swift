@@ -26,7 +26,10 @@ struct ShieldCard: View {
             .padding(Theme.Space.xl)
             .frame(maxWidth: 520)
         }
-        .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 10, bottomTrailingRadius: 10))
+        .clipShape(
+            UnevenRoundedRectangle(
+                topLeadingRadius: presentation.isBrowser ? 0 : 10, bottomLeadingRadius: 10,
+                bottomTrailingRadius: 10, topTrailingRadius: presentation.isBrowser ? 0 : 10))
         .tint(Theme.ember)
     }
 
@@ -121,15 +124,13 @@ private struct PauseBody: View {
                     HStack(spacing: Theme.Space.s) {
                         ForEach(pause.sessionMinutes, id: \.self) { minutes in
                             Button("\(minutes) min") { coordinator.choose(minutes: minutes) }
-                                .buttonStyle(.bordered)
-                                .controlSize(.large)
+                                .buttonStyle(ShieldButtonStyle(prominent: false))
                         }
                     }
                     Button(presentation.isBrowser ? "Not now, close the tab" : "Not now, hide \(presentation.appName)") {
                         coordinator.closeTabOrHide()
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .buttonStyle(ShieldButtonStyle(prominent: true))
                     .keyboardShortcut(.defaultAction)
                 }
                 .transition(.opacity)
@@ -137,7 +138,9 @@ private struct PauseBody: View {
                 Button(presentation.isBrowser ? "Close the tab instead" : "Hide \(presentation.appName) instead") {
                     coordinator.closeTabOrHide()
                 }
-                .buttonStyle(.link)
+                .buttonStyle(.plain)
+                .font(Theme.Font.body)
+                .foregroundStyle(Theme.ember)
             }
         }
         .animation(.easeOut(duration: 0.2), value: presentation.phase)
@@ -158,16 +161,20 @@ private struct BlockBody: View {
                 .background(Theme.emberSoft, in: Circle())
                 .accessibilityHidden(true)
             HStack(spacing: Theme.Space.s) {
-                Button(presentation.isBrowser ? "Close Tab" : "Hide \(presentation.appName)") {
-                    coordinator.closeTabOrHide()
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .keyboardShortcut(.defaultAction)
-                if presentation.isBrowser, !presentation.isParked {
-                    Button("Go Back") { coordinator.goBack() }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
+                if presentation.isBrowser {
+                    Button("Close Tab") { coordinator.closeTabOrHide() }
+                        .buttonStyle(ShieldButtonStyle(prominent: true))
+                        .keyboardShortcut(.defaultAction)
+                    if !presentation.isParked {
+                        Button("Go Back") { coordinator.goBack() }
+                            .buttonStyle(ShieldButtonStyle(prominent: false))
+                    }
+                } else {
+                    Button("Quit \(presentation.appName)") { coordinator.quitApp() }
+                        .buttonStyle(ShieldButtonStyle(prominent: true))
+                        .keyboardShortcut(.defaultAction)
+                    Button("Hide") { coordinator.closeTabOrHide() }
+                        .buttonStyle(ShieldButtonStyle(prominent: false))
                 }
             }
             if block.allowsOverride, !block.closesAutomatically {
@@ -175,7 +182,7 @@ private struct BlockBody: View {
                     coordinator.overrideOneMinute()
                 }
             } else if block.closesAutomatically {
-                Text(presentation.isBrowser ? "Closing this tab\u{2026}" : "Hiding \(presentation.appName)\u{2026}")
+                Text(presentation.isBrowser ? "Closing this tab\u{2026}" : "Quitting \(presentation.appName)\u{2026}")
                     .font(Theme.Font.caption)
                     .foregroundStyle(.secondary)
             }
@@ -277,5 +284,41 @@ struct HoldToConfirmButton: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { action() }
         .help("Press and hold for two seconds")
+    }
+}
+
+/// Plain cover for an app's other windows; the card sits on the front one.
+struct ShieldCover: View {
+    let ruleName: String
+    let symbol: String
+
+    var body: some View {
+        ZStack {
+            Theme.canvas
+            Label(ruleName, systemImage: symbol)
+                .font(Theme.Font.body)
+                .foregroundStyle(.secondary)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+/// The shield panel never becomes key, so system prominent buttons would draw
+/// in their inactive grey. This style keeps the ember fill regardless.
+struct ShieldButtonStyle: ButtonStyle {
+    let prominent: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(Theme.Font.body.weight(.medium))
+            .foregroundStyle(prominent ? Color.white : Color.primary)
+            .padding(.horizontal, Theme.Space.m)
+            .frame(minWidth: 88, minHeight: 32)
+            .background(
+                Capsule().fill(prominent ? Theme.ember : Theme.track)
+            )
+            .overlay(Capsule().strokeBorder(prominent ? Color.clear : Theme.hairline, lineWidth: 0.5))
+            .opacity(configuration.isPressed ? 0.75 : 1)
+            .contentShape(Capsule())
     }
 }

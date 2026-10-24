@@ -51,7 +51,7 @@ public enum CategoryCatalog {
         if BrowserCatalog.isBrowser(bundleID: bundleID) {
             return .other
         }
-        return apps[bundleID] ?? .other
+        return apps[bundleID] ?? DeclaredAppCategory.category(bundleID: bundleID) ?? .other
     }
 
     public static func category(domain: String) -> UsageCategory? {

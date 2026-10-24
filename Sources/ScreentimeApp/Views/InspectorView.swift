@@ -30,8 +30,6 @@ struct InspectorView: View {
                     }
                     LabeledContent("Category", value: context.category.title)
                     if let surface = context.surface { LabeledContent("Surface", value: surface) }
-                } else {
-                    Text(statusText(live.status)).foregroundStyle(.secondary)
                 }
                 LabeledContent("Status", value: statusText(live.status))
             }

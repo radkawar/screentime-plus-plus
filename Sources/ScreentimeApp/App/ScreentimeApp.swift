@@ -158,9 +158,9 @@ private struct SidebarStatus: View {
     }
 
     private var text: String {
+        if !model.isAccessibilityTrusted { return "Needs Accessibility" }
         if let focus = model.activeFocus { return "Focus until \(Format.clock(focus.end))" }
         switch model.live.status {
-        case .needsAccessibility: return "Needs Accessibility"
         case .idle: return "Idle"
         case .away: return "Away"
         default:
@@ -170,9 +170,8 @@ private struct SidebarStatus: View {
     }
 
     private var color: Color {
-        if model.activeFocus != nil { return Theme.ember }
+        if !model.isAccessibilityTrusted || model.activeFocus != nil { return Theme.ember }
         switch model.live.status {
-        case .needsAccessibility: return Theme.ember
         case .idle, .away: return .secondary
         default: return Theme.color(for: .productivity)
         }

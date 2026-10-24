@@ -105,7 +105,7 @@ struct FocusView: View {
             }
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 SectionTitle(title: "Block", trailing: "\(selected.count) rules")
-                VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
                     ForEach(model.configuration.rules) { rule in
                         Toggle(isOn: binding(rule.id)) {
                             HStack(spacing: Theme.Space.s) {
@@ -119,6 +119,7 @@ struct FocusView: View {
                         }
                         .toggleStyle(.checkbox)
                         .padding(.vertical, 6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         if rule.id != model.configuration.rules.last?.id { Divider() }
                     }
                 }
@@ -131,6 +132,7 @@ struct FocusView: View {
                 }
             }
             .toggleStyle(.switch)
+            .frame(maxWidth: 520, alignment: .leading)
             Button {
                 model.startFocus(
                     minutes: minutes, ruleIDs: Array(selected), locked: locks,
