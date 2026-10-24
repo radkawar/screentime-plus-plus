@@ -1,0 +1,205 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing vMAJOR.MINOR.PATCH tag to package
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Verify, sign, notarize, and package
+    runs-on: macos-26
+    timeout-minutes: 75
+    environment: release-signing
+    permissions:
+      contents: read
+    env:
+      # Keep release verification on the same pinned toolchain as CI.
+      DEVELOPER_DIR: /Applications/Xcode_26.4.1.app/Contents/Developer
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      DEVELOPER_ID_APPLICATION: "Developer ID Application: Radheshyam Kawar (3UX5N7Y8TY)"
+      DEVELOPER_ID_TEAM_ID: 3UX5N7Y8TY
+
+    steps:
+      - name: Check out the tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Verify immutable release identity
+        run: |
+          test "$(git tag --points-at HEAD --list "$RELEASE_TAG")" = "$RELEASE_TAG"
+          Scripts/verify-version.sh --tag "$RELEASE_TAG"
+
+      - name: Verify source quality
+        run: |
+          bash -n Scripts/*.sh
+          for script in Scripts/*.sh; do bash -n "$script"; done
+
+      - name: Run package tests
+        run: swift test
+
+      - name: Verify generated project
+        run: |
+          Scripts/xcodegen.sh generate
+          git diff --exit-code -- Screentime.xcodeproj/project.pbxproj
+
+      - name: Install ephemeral release credentials
+        env:
+          DEVELOPER_ID_APPLICATION_P12: ${{ secrets.DEVELOPER_ID_APPLICATION_P12 }}
+          DEVELOPER_ID_APPLICATION_PASSWORD: ${{ secrets.DEVELOPER_ID_APPLICATION_PASSWORD }}
+          APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          test -n "$DEVELOPER_ID_APPLICATION_P12"
+          test -n "$DEVELOPER_ID_APPLICATION_PASSWORD"
+          test -n "$APP_STORE_CONNECT_API_KEY_P8"
+          umask 077
+
+          signing_keychain="$RUNNER_TEMP/screentime-plus-plus-signing.keychain-db"
+          signing_keychain_password="$(openssl rand -base64 36 | tr -d '\n')"
+          certificate_path="$RUNNER_TEMP/developer-id.p12"
+          api_key_path="$RUNNER_TEMP/AuthKey.p8"
+
+          echo "SCREENTIME_SIGNING_KEYCHAIN=$signing_keychain" >>"$GITHUB_ENV"
+          echo "SCREENTIME_NOTARY_KEY_PATH=$api_key_path" >>"$GITHUB_ENV"
+
+          printf '%s' "$DEVELOPER_ID_APPLICATION_P12" \
+            | /usr/bin/base64 -D >"$certificate_path"
+          printf '%s' "$APP_STORE_CONNECT_API_KEY_P8" >"$api_key_path"
+
+          security create-keychain -p "$signing_keychain_password" "$signing_keychain"
+          security set-keychain-settings -lut 21600 "$signing_keychain"
+          security unlock-keychain -p "$signing_keychain_password" "$signing_keychain"
+          security import "$certificate_path" \
+            -k "$signing_keychain" \
+            -P "$DEVELOPER_ID_APPLICATION_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "$signing_keychain_password" \
+            "$signing_keychain"
+          security list-keychains -d user -s "$signing_keychain"
+          security default-keychain -d user -s "$signing_keychain"
+
+          identity_output="$(security find-identity -v -p codesigning "$signing_keychain")"
+          grep -Fq '08304A35FC08F4049CFCE649DE8EFF7195F5F0E7' <<<"$identity_output"
+          grep -Fq "$DEVELOPER_ID_APPLICATION" <<<"$identity_output"
+
+      - name: Build, notarize, and verify universal assets
+        env:
+          SCREENTIME_NOTARY_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          SCREENTIME_NOTARY_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$SCREENTIME_NOTARY_KEY_ID"
+          test -n "$SCREENTIME_NOTARY_ISSUER_ID"
+          export SOURCE_DATE_EPOCH="$(git show -s --format=%ct "${RELEASE_TAG}^{commit}")"
+          Scripts/package-release.sh \
+            --expected-tag "$RELEASE_TAG" \
+            --signing developer-id \
+            --identity 08304A35FC08F4049CFCE649DE8EFF7195F5F0E7 \
+            --team-id "$DEVELOPER_ID_TEAM_ID" \
+            --output build/releases
+
+      - name: Remove ephemeral release credentials
+        if: ${{ always() }}
+        run: |
+          if [[ -n "${SCREENTIME_SIGNING_KEYCHAIN:-}" ]]; then
+            security delete-keychain "$SCREENTIME_SIGNING_KEYCHAIN" || true
+          fi
+          rm -f "$RUNNER_TEMP/developer-id.p12" "$RUNNER_TEMP/AuthKey.p8"
+
+      - name: Generate signed update feed
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          test -n "$SPARKLE_ED_PRIVATE_KEY"
+          dmg=(build/releases/ScreentimePlusPlus-*.dmg)
+          test "${#dmg[@]}" -eq 1
+          Scripts/generate-update-feed.sh \
+            --archive "${dmg[0]}" \
+            --output build/releases/appcast.xml \
+            --tag "$RELEASE_TAG"
+
+      - name: Create stable latest-download aliases
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          dmg=(build/releases/ScreentimePlusPlus-v*-macos-universal.dmg)
+          test "${#dmg[@]}" -eq 1
+          latest="build/releases/ScreentimePlusPlus-latest-macos-universal.dmg"
+          cp "${dmg[0]}" "$latest"
+          (
+            cd build/releases
+            shasum -a 256 "$(basename "$latest")" \
+              >"$(basename "$latest").sha256"
+          )
+
+      - name: Upload verified release assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: screentime-plus-plus-release-${{ env.RELEASE_TAG }}
+          path: |
+            build/releases/ScreentimePlusPlus-*.dmg
+            build/releases/ScreentimePlusPlus-*.dmg.sha256
+            build/releases/appcast.xml
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  publish:
+    name: Publish verified release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+    steps:
+      - name: Download verified assets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: screentime-plus-plus-release-${{ env.RELEASE_TAG }}
+          path: release-assets
+
+      - name: Publish the notarized release
+        run: |
+          shopt -s nullglob
+          assets=(release-assets/ScreentimePlusPlus-* release-assets/appcast.xml)
+          if (( ${#assets[@]} == 0 )); then
+            echo "error: verified release artifact is empty" >&2
+            exit 1
+          fi
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "error: refusing to overwrite an existing release" >&2
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" "${assets[@]}" \
+            --verify-tag \
+            --latest \
+            --generate-notes \
+            --title "Screentime++ $RELEASE_TAG" \
+            --notes "Developer ID signed and notarized universal macOS release. Open the DMG and drag Screentime++ to Applications. In-app updates are additionally protected by ScreentimePlusPlus's Ed25519 update signature."
+
+      - name: Publish the signed update feed
+        run: gh workflow run update-feed.yml --ref main -f tag="$RELEASE_TAG"

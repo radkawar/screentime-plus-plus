@@ -1,0 +1,93 @@
+name: Screentime
+options:
+  bundleIdPrefix: dev.screentimepp
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+# One xcconfig owns MARKETING_VERSION and CURRENT_PROJECT_VERSION for every target.
+configFiles:
+  Debug: Config/Version.xcconfig
+  Release: Config/Version.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGNING_ALLOWED: "YES"
+    CODE_SIGNING_REQUIRED: "NO"
+    DEAD_CODE_STRIPPING: "YES"
+    ALWAYS_SEARCH_USER_PATHS: "NO"
+  configs:
+    Debug:
+      # Preserve debugger attachment for local development.
+      ENABLE_HARDENED_RUNTIME: "NO"
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: "DEBUG"
+    Release:
+      # Required for Developer ID distribution and notarization.
+      ENABLE_HARDENED_RUNTIME: "YES"
+      # Never let Release builds gain debugger attachment rights.
+      CODE_SIGN_INJECT_BASE_ENTITLEMENTS: "NO"
+
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.9.5
+
+targets:
+  # Pure logic plus Accessibility readers. Static so the app has no nested
+  # framework to sign; SwiftPM builds the same sources for `swift test`.
+  ScreentimeCore:
+    type: library.static
+    platform: macOS
+    sources:
+      - path: Sources/ScreentimeCore
+    settings:
+      base:
+        PRODUCT_NAME: ScreentimeCore
+        PRODUCT_MODULE_NAME: ScreentimeCore
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+    dependencies:
+      - sdk: libsqlite3.tbd
+      - sdk: AppKit.framework
+      - sdk: ApplicationServices.framework
+
+  ScreentimeApp:
+    type: application
+    productName: Screentime++
+    platform: macOS
+    sources:
+      - path: Sources/ScreentimeApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.screentimepp.app
+        PRODUCT_NAME: Screentime++
+        PRODUCT_MODULE_NAME: ScreentimeApp
+        EXECUTABLE_NAME: Screentime++
+        INFOPLIST_FILE: Config/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Config/Screentime.entitlements
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+        COMBINE_HIDPI_IMAGES: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    dependencies:
+      - target: ScreentimeCore
+        link: true
+      - package: Sparkle
+      - sdk: libsqlite3.tbd
+      - sdk: AppKit.framework
+      - sdk: ApplicationServices.framework
+      - sdk: Charts.framework
+      - sdk: ServiceManagement.framework
+      - sdk: SwiftUI.framework
+
+schemes:
+  ScreentimeApp:
+    build:
+      targets:
+        ScreentimeApp: all
+    run:
+      config: Debug
+    archive:
+      config: Release

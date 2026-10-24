@@ -1,0 +1,43 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  quality:
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.4.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Report toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          if ! command -v xcodegen >/dev/null; then brew install xcodegen; fi
+          Scripts/xcodegen.sh --version
+      - name: Check shell syntax and version
+        run: |
+          bash -n Scripts/*.sh
+          for script in Scripts/*.sh; do bash -n "$script"; done
+          Scripts/verify-version.sh
+      - name: Test core logic
+        run: swift test
+      - name: Verify generated project
+        run: |
+          Scripts/xcodegen.sh generate
+          git diff --exit-code -- Screentime.xcodeproj
+      - name: Build Debug unsigned
+        run: |
+          xcodebuild -project Screentime.xcodeproj -scheme ScreentimeApp \
+            -configuration Debug -derivedDataPath build/DerivedData \
+            -destination "platform=macOS,arch=$(uname -m)" \
+            CODE_SIGNING_ALLOWED=NO ONLY_ACTIVE_ARCH=YES build
+          Scripts/verify-version.sh --products build/DerivedData/Build/Products/Debug

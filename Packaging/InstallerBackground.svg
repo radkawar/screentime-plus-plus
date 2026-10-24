@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="660" height="420" viewBox="0 0 660 420">
+  <rect width="660" height="420" fill="#F4F0E8"/>
+  <text x="330" y="65" text-anchor="middle" font-family="Helvetica, sans-serif" font-size="29" font-weight="600" fill="#302B27">Screentime++</text>
+  <text x="330" y="98" text-anchor="middle" font-family="Helvetica, sans-serif" font-size="14" fill="#746B62">Make room for what matters.</text>
+  <path d="M275 222 H385 M373 210 L385 222 L373 234" fill="none" stroke="#C8502A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="330" y="355" text-anchor="middle" font-family="Helvetica, sans-serif" font-size="15" fill="#302B27">Drag Screentime++ to Applications</text>
+  <path d="M290 387 H370" stroke="#C8502A" stroke-width="2"/>
+</svg>

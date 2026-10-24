@@ -1,0 +1,70 @@
+name: Update Feed
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published release tag whose appcast should be deployed
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Publish signed appcast
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+
+    steps:
+      - name: Download the published signed feed
+        run: |
+          test -n "$RELEASE_TAG"
+          test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = "false"
+          test "$(gh release view "$RELEASE_TAG" --json isPrerelease --jq .isPrerelease)" = "false"
+          mkdir -p site
+          gh release download "$RELEASE_TAG" \
+            --pattern appcast.xml \
+            --dir site
+          test -s site/appcast.xml
+          grep -Fq "sparkle:edSignature=" site/appcast.xml
+          grep -Fq "<!-- sparkle-signatures:" site/appcast.xml
+          grep -Fq "edSignature:" site/appcast.xml
+          grep -Fq "github.com/radkawar/screentime-plus-plus/releases/download/$RELEASE_TAG/" site/appcast.xml
+
+          dmg_name="ScreentimePlusPlus-${RELEASE_TAG}-macos-universal.dmg"
+          grep -Fq "/$RELEASE_TAG/$dmg_name" site/appcast.xml
+          mkdir -p release-check
+          gh release download "$RELEASE_TAG" \
+            --pattern "$dmg_name" \
+            --pattern "$dmg_name.sha256" \
+            --dir release-check
+          (
+            cd release-check
+            sha256sum -c "$dmg_name.sha256"
+          )
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        with:
+          path: site
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

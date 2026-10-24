@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Screentime++</string>
+	<key>CFBundleDisplayName</key>
+	<string>Screentime++</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>15.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>NSAccessibilityUsageDescription</key>
+	<string>Screentime++ reads the active app, website, and page text on this Mac so it can measure screen time and enforce the shields you set.</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright (c) 2026 Screentime++ contributors. MIT License.</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Screentime++ replaces a blocked tab with a blank page so it stops playing, and restores it when you choose to continue.</string>
+	<key>SUFeedURL</key>
+	<string>https://radkawar.github.io/screentime-plus-plus/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>7mvi3daPQaEqcAbIYRoYpzz2Tc6rRMZC0Kz3XGcV+lE=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
+	<key>SUAllowsAutomaticUpdates</key>
+	<true/>
+	<key>SUVerifyUpdateBeforeExtraction</key>
+	<true/>
+	<key>SURequireSignedFeed</key>
+	<true/>
+</dict>
+</plist>
