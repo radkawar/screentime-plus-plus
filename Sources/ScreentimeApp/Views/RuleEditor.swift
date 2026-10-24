@@ -134,7 +134,7 @@ struct RuleEditor: View {
             } label: {
                 Label("Add App, Site, Page or Phrase\u{2026}", systemImage: "plus")
             }
-            .buttonStyle(.borderless)
+            .linkStyle()
         } header: {
             Text("What")
         } footer: {
@@ -151,7 +151,7 @@ struct RuleEditor: View {
             } label: {
                 Label("Add Exception\u{2026}", systemImage: "plus")
             }
-            .buttonStyle(.borderless)
+            .linkStyle()
         }
     }
 
@@ -214,7 +214,7 @@ struct RuleEditor: View {
                 } label: {
                     Label("Add Time Window", systemImage: "plus")
                 }
-                .buttonStyle(.borderless)
+                .linkStyle()
             }
         }
     }

@@ -89,7 +89,7 @@ struct SetupView: View {
                         Button(finishedPauseDemo ? "Try the Pause Again" : "Try a Pause") {
                             showsPauseDemo = true
                         }
-                        .buttonStyle(.borderless)
+                        .linkStyle()
                         if finishedPauseDemo {
                             Label("You\u{2019}re ready. Your apps and tabs stayed as they were.", systemImage: "checkmark.circle")
                                 .font(Theme.Font.caption).foregroundStyle(Theme.accent)
@@ -171,7 +171,7 @@ struct SetupPauseDemo: View {
                 }
                 Spacer()
                 Button("Done") { dismiss() }
-                    .buttonStyle(.borderless)
+                    .linkStyle()
             }
             .padding(Theme.Space.l)
             Divider()

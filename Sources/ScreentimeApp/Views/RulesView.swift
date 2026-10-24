@@ -47,7 +47,7 @@ struct RulesView: View {
                     } actions: {
                         Button("Create a Rule") { editing = RuleTemplate.blank.make() }
                             .buttonStyle(.borderedProminent)
-                        Button("Browse the Library…") { showsTemplates = true }.buttonStyle(.borderless)
+                        Button("Browse the Library…") { showsTemplates = true }.linkStyle()
                     }
                     .frame(maxWidth: .infinity, minHeight: 280)
                 } else {

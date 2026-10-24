@@ -52,6 +52,7 @@ struct NotificationSettings: View {
                         }
                     }
                     .buttonStyle(.borderless)
+                    .foregroundStyle(Theme.accent)
                 }
             }
             if let problem = model.notifications.problem {
@@ -59,7 +60,6 @@ struct NotificationSettings: View {
             }
         }
         .formStyle(.grouped)
-        .tint(Theme.accent)
         .task { authorized = await model.notifications.isAuthorized() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {

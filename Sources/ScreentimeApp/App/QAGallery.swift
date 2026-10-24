@@ -14,7 +14,7 @@
 
         static func presentIfRequested(model: AppModel, updater: SPUUpdater) {
             guard CommandLine.arguments.contains("--qa-gallery") else { return }
-            let env = { (view: AnyView) in AnyView(view.environment(model).tint(Theme.accent)) }
+            let env = { (view: AnyView) in AnyView(view.environment(model)) }
             open(
                 "Widget Small", size: CGSize(width: 170, height: 170),
                 AnyView(TodayWidgetView(snapshot: .sample).padding(16).background(Theme.canvas)))
@@ -104,9 +104,6 @@
                 open(title, size: CGSize(width: 520, height: 520), env(AnyView(pane.frame(width: 520))))
             }
             open(
-                "Settings Search", size: CGSize(width: 620, height: 400),
-                env(AnyView(SettingsView(updater: updater, initialSearch: "history"))))
-            open(
                 "Import Rule Pack", size: CGSize(width: 520, height: 440),
                 env(AnyView(RulePackImportPreview(rules: [RuleTemplate.mindfulSocial.make(), RuleTemplate.windDown.make()]))))
             open(
@@ -144,7 +141,7 @@
             open("Focus Profiles", size: CGSize(width: 600, height: 320),
                  AnyView(FocusProfilesView(profiles: [writing, study], defaultID: writing.id,
                                            start: { _ in }, edit: { _ in }, makeDefault: { _ in },
-                                           delete: { _ in }).padding(Theme.Space.xl).tint(Theme.accent)))
+                                           delete: { _ in }).padding(Theme.Space.xl)))
             open("Running Focus", size: CGSize(width: 680, height: 680),
                  AnyView(FocusRunningView(focus: writing.session(start: Date().addingTimeInterval(-600)),
                                           rules: [], extend: {}, end: {}).padding(Theme.Space.xl)))

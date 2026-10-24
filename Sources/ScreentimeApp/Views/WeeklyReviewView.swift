@@ -21,7 +21,6 @@ struct WeeklyReviewView: View {
             .frame(maxWidth: .infinity)
         }
         .background(Theme.canvas)
-        .tint(Theme.accent)
         .navigationTitle("This Week")
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {

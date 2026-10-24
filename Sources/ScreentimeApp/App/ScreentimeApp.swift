@@ -12,7 +12,6 @@ struct ScreentimeApp: App {
             MainShell()
                 .environment(delegate.model)
                 .frame(minWidth: 820, minHeight: 560)
-                .tint(Theme.accent)
         }
         .defaultSize(width: 1_060, height: 720)
         .commands {
@@ -35,7 +34,7 @@ struct ScreentimeApp: App {
         .defaultSize(width: 680, height: 760)
 
         Window("Inspector", id: "inspector") {
-            InspectorView().environment(delegate.model).tint(Theme.accent)
+            InspectorView().environment(delegate.model)
                 .frame(minWidth: 680, minHeight: 480)
         }
         .defaultSize(width: 900, height: 640)

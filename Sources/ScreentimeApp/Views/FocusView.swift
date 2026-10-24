@@ -90,7 +90,7 @@ struct FocusView: View {
                             .accessibilityLabel("Remove \(target.displayName)")
                     }
                 }
-                Button("Also Block…", systemImage: "plus") { composing = true }.buttonStyle(.borderless)
+                Button("Also Block…", systemImage: "plus") { composing = true }.linkStyle()
             }
             DisclosureGroup("Include My Rules", isExpanded: $includesRules) {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
@@ -126,7 +126,7 @@ struct FocusView: View {
                 }.buttonStyle(.bordered).controlSize(.large)
                 Button("New Profile") {
                     load(FocusProfile(name: "Study"))
-                }.buttonStyle(.borderless)
+                }.linkStyle()
             }.disabled(!draft.hasSelection || requestingCalendar)
             Text("Save your profile to use its schedule, calendar trigger, and one-click start.")
                 .font(Theme.Font.caption).foregroundStyle(.secondary)
@@ -150,7 +150,7 @@ struct FocusView: View {
                 Button("Add Time Window", systemImage: "plus") {
                     draft.windows.append(ScheduleWindow(weekdays: ScheduleWindow.workdays,
                                                          startMinute: 14 * 60, endMinute: 15 * 60))
-                }.buttonStyle(.borderless)
+                }.linkStyle()
             }
             Toggle("Start Focus during calendar events", isOn: Binding(
                 get: { calendarEnabled },

@@ -3,101 +3,29 @@ import Sparkle
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// Native macOS settings: toolbar tabs, one grouped form per pane, each pane
+/// sized to its content so the window never shows empty space.
 struct SettingsView: View {
     let updater: SPUUpdater
-    @State private var tab: SettingsTab = .general
-    @State private var search = ""
-
-    init(updater: SPUUpdater, initialSearch: String = "") {
-        self.updater = updater
-        _search = State(initialValue: initialSearch)
-    }
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: Theme.Space.s) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Search Settings", text: $search)
-                    .textFieldStyle(.plain)
-                if !search.isEmpty {
-                    Button { search = "" } label: { Image(systemName: "xmark.circle.fill") }
-                        .buttonStyle(.plain).foregroundStyle(.secondary)
-                        .accessibilityLabel("Clear Search")
-                }
-            }
-            .padding(Theme.Space.s)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: Theme.Radius.chip))
-            .padding([.horizontal, .top], Theme.Space.m)
-            Picker("Settings", selection: $tab) {
-                ForEach(SettingsTab.allCases) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .padding(Theme.Space.m)
-            if search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                switch tab {
-                case .general: GeneralSettings()
-                case .shields: ShieldSettings()
-                case .lock: LockSettings()
-                case .privacy: PrivacySettings()
-                case .notifications: NotificationSettings().fixedSize(horizontal: false, vertical: true)
-                case .updates: UpdateSettings(updater: updater)
-                }
-            } else {
-                searchResults
-            }
+        TabView {
+            pane(GeneralSettings()).tabItem { Label("General", systemImage: "gearshape") }
+            pane(ShieldSettings()).tabItem { Label("Shields", systemImage: "hand.raised") }
+            pane(LockSettings()).tabItem { Label("Lock", systemImage: "lock") }
+            pane(PrivacySettings()).tabItem { Label("Privacy & Data", systemImage: "hand.raised.square") }
+            pane(NotificationSettings()).tabItem { Label("Notifications", systemImage: "bell") }
+            pane(UpdateSettings(updater: updater)).tabItem { Label("Updates", systemImage: "arrow.down.circle") }
         }
-        .frame(width: 620)
-        .fixedSize(horizontal: false, vertical: true)
-        .tint(Theme.accent)
+        // No blanket tint: buttons and menus stay neutral, toggles and the
+        // selected tab use the app's accent colour, and destructive actions stay red.
     }
 
-    private var searchResults: some View {
-        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        let results = SettingsTab.allCases.flatMap { tab in
-            tab.rows.filter { $0.localizedCaseInsensitiveContains(query) || tab.rawValue.localizedCaseInsensitiveContains(query) }
-                .map { (tab, $0) }
-        }
-        return VStack(alignment: .leading, spacing: Theme.Space.s) {
-            if results.isEmpty {
-                Text("No settings match “\(query)”.").foregroundStyle(.secondary)
-                    .padding(.vertical, Theme.Space.m)
-            } else {
-                ForEach(Array(results.enumerated()), id: \.offset) { _, result in
-                    Button {
-                        tab = result.0
-                        search = ""
-                    } label: {
-                        HStack {
-                            Text(result.1)
-                            Spacer()
-                            Text(result.0.rawValue).foregroundStyle(.secondary)
-                            Image(systemName: "chevron.right").foregroundStyle(.tertiary)
-                        }
-                        .padding(.vertical, Theme.Space.s)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .padding([.horizontal, .bottom], Theme.Space.m)
-    }
-}
-
-private enum SettingsTab: String, CaseIterable, Identifiable {
-    case general = "General", shields = "Shields", lock = "Lock"
-    case privacy = "Privacy & Data", notifications = "Notifications", updates = "Updates"
-    var id: String { rawValue }
-
-    var rows: [String] {
-        switch self {
-        case .general: ["Open at Login", "Distracting Time per Day", "Stop the Clock After", "Per-App Idle Overrides"]
-        case .shields: ["Read Page Text for Phrase Rules", "Blank the Tab Behind a Shield", "Accessibility", "Automation Settings"]
-        case .lock: ["Lock Rules", "Extend Lock"]
-        case .privacy: ["Keep History For", "Export History CSV", "Delete All History", "Import Screen Time"]
-        case .notifications: ["Weekly Review Ready", "Session Ending", "Daily Goal Reminder"]
-        case .updates: ["Check for Updates Automatically", "Check Now", "Version"]
-        }
+    private func pane<Content: View>(_ content: Content) -> some View {
+        content
+            .scrollDisabled(true)
+            .frame(width: 540)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -156,7 +84,7 @@ struct ShieldSettings: View {
                         get: { settings.parksBrowserTabs },
                         set: { value in model.updateSettings { $0.parksBrowserTabs = value } }))
                 Text(
-                    "In Safari, Chrome, Arc, Brave, Edge and Vivaldi the tab is replaced with a blank page so audio and video stop, and restored if you continue. macOS asks once per browser."
+                    "In Safari, Chrome, Arc, Brave, Edge, Vivaldi, Firefox and Zen the tab is replaced with a blank page so audio and video stop, and restored if you continue. Safari and Chrome-based browsers ask once for permission."
                 )
                 .font(Theme.Font.caption)
                 .foregroundStyle(.secondary)
@@ -175,6 +103,7 @@ struct ShieldSettings: View {
                         URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!)
                 }
                 .buttonStyle(.borderless)
+                .foregroundStyle(Theme.accent)
             }
         }
         .formStyle(.grouped)

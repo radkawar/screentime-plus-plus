@@ -34,7 +34,7 @@ enum RulePackFiles {
             window.title = "Import Rule Pack"
             window.isReleasedWhenClosed = false
             let view = RulePackImportPreview(rules: rules) { [weak window] in window?.close() }
-                .environment(model).tint(Theme.accent)
+                .environment(model)
             let host = NSHostingView(rootView: view)
             host.sizingOptions = []
             window.contentView = host
@@ -143,7 +143,7 @@ struct RulePackExportPicker: View {
             HStack {
                 Button("Select All") { selected = Set(rules.map(\.id)) }
                 Button("Deselect All") { selected.removeAll() }
-            }.buttonStyle(.borderless)
+            }.linkStyle()
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.Space.m) {
                     ForEach(rules) { rule in

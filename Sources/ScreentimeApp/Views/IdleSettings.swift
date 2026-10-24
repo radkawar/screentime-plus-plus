@@ -58,6 +58,7 @@ struct IdleSettings: View {
                 Spacer()
                 Button("Remove", role: .destructive) { set(nil, for: bundleID) }
                     .buttonStyle(.borderless)
+                    .foregroundStyle(.red)
                     .accessibilityLabel("Remove idle setting for \(bundleID)")
             }
             Picker("When you stop input", selection: Binding(

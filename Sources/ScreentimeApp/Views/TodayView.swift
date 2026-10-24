@@ -138,7 +138,7 @@ struct UsageItems: View {
                     Button(showsAllItems ? "Show Fewer" : "Show All \(items.count)") {
                         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { showsAllItems.toggle() }
                     }
-                    .buttonStyle(.borderless)
+                    .linkStyle()
                     .font(Theme.Font.body)
                 }
             }

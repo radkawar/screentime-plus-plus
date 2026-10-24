@@ -24,6 +24,7 @@ struct ScreenTimeImportSettings: View {
                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
             }
             .buttonStyle(.borderless)
+            .foregroundStyle(Theme.accent)
             if hasImported {
                 Label("App history has been imported", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(Theme.accent)

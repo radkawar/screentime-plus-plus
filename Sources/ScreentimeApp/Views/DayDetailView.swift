@@ -13,7 +13,7 @@ struct DayDetailView: View {
             VStack(alignment: .leading, spacing: Theme.Space.xl) {
                 if let close {
                     Button("Back to History", systemImage: "chevron.left", action: close)
-                        .buttonStyle(.borderless)
+                        .linkStyle()
                 }
                 if let summary = sample ?? loaded {
                     DayHeadline(report: summary.report, day: day, goalMinutes: model.configuration.settings.dailyGoalMinutes)

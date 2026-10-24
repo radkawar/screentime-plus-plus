@@ -42,6 +42,7 @@ struct MenuBarView: View {
                     NSApp.activate()
                 }
                 .buttonStyle(.borderless)
+                .foregroundStyle(.primary)
             }
             Divider()
             HStack {
@@ -67,10 +68,12 @@ struct MenuBarView: View {
                 .accessibilityLabel("Quit Screentime++")
             }
             .buttonStyle(.borderless)
+            // Chrome stays neutral so colour only ever means data: the goal
+            // bar, the ribbon and a running session.
+            .foregroundStyle(.primary)
         }
         .padding(Theme.Space.m)
         .frame(width: 320)
-        .tint(Theme.accent)
         .onAppear { model.reloadToday() }
     }
 
@@ -104,7 +107,7 @@ struct MenuBarView: View {
                     Text("\(Format.countdown(focus.end.timeIntervalSince(model.now))) left\(focus.isLocked ? " \u{00B7} Locked" : "")")
                         .font(Theme.Font.caption).foregroundStyle(.secondary).monospacedDigit()
                     Button("Extend 15 min") { model.extendFocus(minutes: 15) }
-                        .buttonStyle(.borderless)
+                        .linkStyle()
                         .font(Theme.Font.caption)
                 }
                 Spacer()
@@ -178,6 +181,7 @@ struct InFrontRow: View {
                     Spacer(minLength: 0)
                     Button("Edit") { edit(coveredRule) }
                         .buttonStyle(.borderless)
+                        .foregroundStyle(.primary)
                         .accessibilityLabel("Edit \(coveredRule.name)")
                 }
                 if let grant {

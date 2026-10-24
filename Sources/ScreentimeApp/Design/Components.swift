@@ -287,3 +287,10 @@ extension ScheduleWindow {
         return Format.clock(date)
     }
 }
+
+extension View {
+    /// An inline text action ("Add Exception…", "Show All 20"): borderless, in the accent colour.
+    func linkStyle() -> some View {
+        buttonStyle(.borderless).foregroundStyle(Theme.accent)
+    }
+}

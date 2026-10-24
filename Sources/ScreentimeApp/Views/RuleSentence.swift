@@ -89,7 +89,7 @@ struct RuleSentenceEditor: View {
             .font(.system(size: 20, design: .serif))
             if rule.exceptions.isEmpty {
                 Button("Add Exception…", action: addException)
-                    .buttonStyle(.borderless)
+                    .linkStyle()
                     .font(Theme.Font.caption)
             }
             Text("Choose a highlighted phrase to change it.")
@@ -109,6 +109,8 @@ struct RuleSentenceEditor: View {
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
+        // Highlighted phrases are the sentence's controls: keep them in the accent.
+        .tint(Theme.accent)
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityLabel(label)
         .accessibilityValue(title)

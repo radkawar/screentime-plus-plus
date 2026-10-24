@@ -81,7 +81,7 @@ struct ItemDetailView: View {
                         }
                         Spacer()
                         Button("Edit") { editing = rule }
-                            .buttonStyle(.borderless)
+                            .linkStyle()
                             .disabled(!model.canEdit(rule))
                     }
                 }
