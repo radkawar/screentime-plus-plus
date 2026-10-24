@@ -6,14 +6,38 @@ import SwiftUI
 enum Theme {
     /// Positive and primary: controls, selection, "on track", turning back.
     static let accent = Color(light: 0x2E7D57, dark: 0x3FAE77)
-    static let accentSoft = Color(light: 0x2E7D57, dark: 0x3FAE77).opacity(0.14)
+    static let accentSoft = contrastAdaptive(accent, normal: 0.14, increased: 0.26)
     /// Attention without alarm: over goal, overrides, missing permission.
     static let caution = Color(light: 0xB26B12, dark: 0xE3A040)
-    static let cautionSoft = Color(light: 0xB26B12, dark: 0xE3A040).opacity(0.14)
+    static let cautionSoft = contrastAdaptive(caution, normal: 0.14, increased: 0.26)
     static let canvas = Color(nsColor: .windowBackgroundColor)
     static let surface = Color(nsColor: .controlBackgroundColor)
-    static let hairline = Color(nsColor: .separatorColor)
-    static let track = Color.primary.opacity(0.07)
+    static let hairline = contrastAdaptive(Color.primary, normal: 0.16, increased: 0.48)
+    static let track = contrastAdaptive(Color.primary, normal: 0.07, increased: 0.18)
+
+    /// Environment-aware counterparts also support SwiftUI contrast overrides
+    /// (including the QA gallery), rather than only the system appearance.
+    static func track(_ contrast: ColorSchemeContrast) -> Color {
+        contrast == .increased ? Color.primary.opacity(0.18) : track
+    }
+
+    static func hairline(_ contrast: ColorSchemeContrast) -> Color {
+        contrast == .increased ? Color.primary.opacity(0.48) : hairline
+    }
+
+    static func accentSoft(_ contrast: ColorSchemeContrast) -> Color {
+        contrast == .increased ? accent.opacity(0.26) : accentSoft
+    }
+
+    private static func contrastAdaptive(_ color: Color, normal: Double, increased: Double) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let match = appearance.bestMatch(from: [
+                .aqua, .darkAqua, .accessibilityHighContrastAqua, .accessibilityHighContrastDarkAqua,
+            ])
+            let high = match == .accessibilityHighContrastAqua || match == .accessibilityHighContrastDarkAqua
+            return NSColor(color).withAlphaComponent(high ? increased : normal)
+        })
+    }
 
     static func color(for category: UsageCategory) -> Color {
         switch category {
@@ -60,8 +84,11 @@ extension Color {
     init(light: UInt32, dark: UInt32) {
         self.init(
             nsColor: NSColor(name: nil) { appearance in
-                let isDark = appearance.bestMatch(from: [.darkAqua, .vibrantDark, .accessibilityHighContrastDarkAqua])
-                    != nil
+                let match = appearance.bestMatch(from: [
+                    .aqua, .darkAqua, .vibrantLight, .vibrantDark,
+                    .accessibilityHighContrastAqua, .accessibilityHighContrastDarkAqua,
+                ])
+                let isDark = match == .darkAqua || match == .vibrantDark || match == .accessibilityHighContrastDarkAqua
                 return NSColor(hex: isDark ? dark : light)
             })
     }
@@ -89,6 +116,7 @@ enum Format {
     /// "4 hours, 12 minutes" for VoiceOver.
     static func spokenDuration(_ seconds: TimeInterval) -> String {
         let formatter = DateComponentsFormatter()
+        if seconds <= 0 { return "0 minutes" }
         formatter.unitsStyle = .full
         formatter.allowedUnits = seconds >= 3600 ? [.hour, .minute] : [.minute]
         return formatter.string(from: max(60, seconds)) ?? ""

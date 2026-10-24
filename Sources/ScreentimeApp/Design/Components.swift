@@ -5,6 +5,7 @@ import SwiftUI
 struct Chip: View {
     let title: String
     var symbol: String?
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         HStack(spacing: 4) {
@@ -16,9 +17,12 @@ struct Chip: View {
         .lineLimit(1)
         .fixedSize()
         .padding(.horizontal, 8)
-        .frame(height: 20)
+        .padding(.vertical, 3)
+        .frame(minHeight: 20)
         .foregroundStyle(.secondary)
-        .background(Theme.track, in: Capsule())
+        .background(Theme.track(contrast), in: Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
     }
 }
 
@@ -115,6 +119,7 @@ struct SubjectIcon: View {
 struct PillButtonStyle: ButtonStyle {
     let isSelected: Bool
     var compact = false
+    @Environment(\.colorSchemeContrast) private var contrast
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -123,8 +128,8 @@ struct PillButtonStyle: ButtonStyle {
             .foregroundStyle(isSelected ? Color.white : Color.primary)
             .padding(.horizontal, compact ? Theme.Space.s : Theme.Space.m)
             .frame(minWidth: compact ? 36 : 64, minHeight: compact ? 22 : 30)
-            .background(Capsule().fill(isSelected ? Theme.accent : Theme.track))
-            .overlay(Capsule().strokeBorder(isSelected ? Color.clear : Theme.hairline, lineWidth: 0.5))
+            .background(Capsule().fill(isSelected ? Theme.accent : Theme.track(contrast)))
+            .overlay(Capsule().strokeBorder(isSelected ? Color.clear : Theme.hairline(contrast), lineWidth: 0.5))
             .opacity(configuration.isPressed ? 0.75 : 1)
             .contentShape(Capsule())
             .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -152,10 +157,11 @@ struct ProportionBar: View {
     let fraction: Double
     var color: Color = Theme.accent
     var height: CGFloat = 4
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         Capsule()
-            .fill(Theme.track)
+            .fill(Theme.track(contrast))
             .overlay(alignment: .leading) {
                 Capsule()
                     .fill(color)
@@ -204,6 +210,9 @@ struct UsageRow: View {
         .padding(.vertical, 6)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(item.title), \(Format.spokenDuration(item.seconds))")
+        .accessibilityValue(
+            (item.isDistracting ? "Covered by a rule. " : "")
+                + item.surfaces.map { "\($0.name), \(Format.spokenDuration($0.seconds))" }.joined(separator: ". "))
     }
 }
 

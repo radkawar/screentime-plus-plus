@@ -41,11 +41,7 @@ struct InspectorView: View {
                     LabeledContent("Age", value: "\(max(0, Int(model.now.timeIntervalSince(content.capturedAt))))s")
                     Toggle("Show text", isOn: $showsText)
                     if showsText {
-                        Text(String(content.text.value.prefix(1_500)))
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        InspectorPageText(content: content).equatable()
                     }
                 } else {
                     Text("No page text read yet. It\u{2019}s read while this pane is open and when a rule needs it.")
@@ -82,6 +78,32 @@ struct InspectorView: View {
         case .own: "Screentime++ is in front"
         case .needsAccessibility: "Needs Accessibility access"
         }
+    }
+}
+
+/// Keep selection and the scroll position stable while the age label ticks.
+/// Only a new capture should cause the text view to update.
+private struct InspectorPageText: View, Equatable {
+    let content: PageContent
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.content.sourceKey == rhs.content.sourceKey
+            && lhs.content.capturedAt == rhs.content.capturedAt
+    }
+
+    var body: some View {
+        ScrollView {
+            Text(String(content.text.value.prefix(1_500)))
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(Theme.Space.s)
+        }
+        .frame(height: 220)
+        .background(Theme.track, in: RoundedRectangle(cornerRadius: Theme.Radius.chip))
+        .accessibilityLabel("Captured page text")
     }
 }
 

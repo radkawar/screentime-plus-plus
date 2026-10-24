@@ -5,6 +5,8 @@ public struct AppSettings: Codable, Hashable, Sendable {
     public var dailyGoalMinutes: Int
     /// No input for this long stops the clock.
     public var idleThresholdSeconds: Int
+    /// Nil preserves the global policy for configurations saved before app overrides.
+    public var appIdleOverrides: [String: AppIdleOverride]?
     /// Read page text for content rules. Off means title and address only.
     public var inspectsPageText: Bool
     /// Replace blocked tabs with a blank page in scriptable browsers.
@@ -15,6 +17,10 @@ public struct AppSettings: Codable, Hashable, Sendable {
     /// Until then, no rule applies (the menu bar safety valve).
     public var rulesPausedUntil: Date?
     public var hasCompletedSetup: Bool
+    /// Optional for older saved configurations; nil means notifications are off.
+    public var weeklyReviewNotifications: Bool?
+    public var sessionEndingNotifications: Bool?
+    public var goalNotifications: Bool?
 
     public init(
         dailyGoalMinutes: Int = 90, idleThresholdSeconds: Int = 120, inspectsPageText: Bool = true,

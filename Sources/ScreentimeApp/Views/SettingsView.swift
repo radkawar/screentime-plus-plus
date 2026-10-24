@@ -1,20 +1,103 @@
 import ScreentimeCore
 import Sparkle
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
     let updater: SPUUpdater
+    @State private var tab: SettingsTab = .general
+    @State private var search = ""
+
+    init(updater: SPUUpdater, initialSearch: String = "") {
+        self.updater = updater
+        _search = State(initialValue: initialSearch)
+    }
 
     var body: some View {
-        TabView {
-            GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }
-            ShieldSettings().tabItem { Label("Shields", systemImage: "hand.raised") }
-            LockSettings().tabItem { Label("Lock", systemImage: "lock") }
-            PrivacySettings().tabItem { Label("Privacy", systemImage: "hand.raised.square") }
-            UpdateSettings(updater: updater).tabItem { Label("Updates", systemImage: "arrow.down.circle") }
+        VStack(spacing: 0) {
+            HStack(spacing: Theme.Space.s) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField("Search Settings", text: $search)
+                    .textFieldStyle(.plain)
+                if !search.isEmpty {
+                    Button { search = "" } label: { Image(systemName: "xmark.circle.fill") }
+                        .buttonStyle(.plain).foregroundStyle(.secondary)
+                        .accessibilityLabel("Clear Search")
+                }
+            }
+            .padding(Theme.Space.s)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: Theme.Radius.chip))
+            .padding([.horizontal, .top], Theme.Space.m)
+            Picker("Settings", selection: $tab) {
+                ForEach(SettingsTab.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .padding(Theme.Space.m)
+            if search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                switch tab {
+                case .general: GeneralSettings()
+                case .shields: ShieldSettings()
+                case .lock: LockSettings()
+                case .privacy: PrivacySettings()
+                case .notifications: NotificationSettings().fixedSize(horizontal: false, vertical: true)
+                case .updates: UpdateSettings(updater: updater)
+                }
+            } else {
+                searchResults
+            }
         }
-        .frame(width: 520)
+        .frame(width: 620)
+        .fixedSize(horizontal: false, vertical: true)
         .tint(Theme.accent)
+    }
+
+    private var searchResults: some View {
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        let results = SettingsTab.allCases.flatMap { tab in
+            tab.rows.filter { $0.localizedCaseInsensitiveContains(query) || tab.rawValue.localizedCaseInsensitiveContains(query) }
+                .map { (tab, $0) }
+        }
+        return VStack(alignment: .leading, spacing: Theme.Space.s) {
+            if results.isEmpty {
+                Text("No settings match “\(query)”.").foregroundStyle(.secondary)
+                    .padding(.vertical, Theme.Space.m)
+            } else {
+                ForEach(Array(results.enumerated()), id: \.offset) { _, result in
+                    Button {
+                        tab = result.0
+                        search = ""
+                    } label: {
+                        HStack {
+                            Text(result.1)
+                            Spacer()
+                            Text(result.0.rawValue).foregroundStyle(.secondary)
+                            Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                        }
+                        .padding(.vertical, Theme.Space.s)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding([.horizontal, .bottom], Theme.Space.m)
+    }
+}
+
+private enum SettingsTab: String, CaseIterable, Identifiable {
+    case general = "General", shields = "Shields", lock = "Lock"
+    case privacy = "Privacy & Data", notifications = "Notifications", updates = "Updates"
+    var id: String { rawValue }
+
+    var rows: [String] {
+        switch self {
+        case .general: ["Open at Login", "Distracting Time per Day", "Stop the Clock After", "Per-App Idle Overrides"]
+        case .shields: ["Read Page Text for Phrase Rules", "Blank the Tab Behind a Shield", "Accessibility", "Automation Settings"]
+        case .lock: ["Lock Rules", "Extend Lock"]
+        case .privacy: ["Keep History For", "Export History CSV", "Delete All History", "Import Screen Time"]
+        case .notifications: ["Weekly Review Ready", "Session Ending", "Daily Goal Reminder"]
+        case .updates: ["Check for Updates Automatically", "Check Now", "Version"]
+        }
     }
 }
 
@@ -43,23 +126,10 @@ struct GeneralSettings: View {
                 Text("Distracting time is time spent on anything a rule covers.")
                     .font(Theme.Font.caption).foregroundStyle(.secondary)
             }
-            Section("Idle") {
-                Picker(
-                    "Stop the clock after",
-                    selection: Binding(
-                        get: { settings.idleThresholdSeconds },
-                        set: { value in model.updateSettings { $0.idleThresholdSeconds = value } })
-                ) {
-                    Text("1 minute").tag(60)
-                    Text("2 minutes").tag(120)
-                    Text("5 minutes").tag(300)
-                    Text("10 minutes").tag(600)
-                }
-                Text("Video that keeps the display awake still counts as use.")
-                    .font(Theme.Font.caption).foregroundStyle(.secondary)
-            }
+            IdleSettings()
         }
         .formStyle(.grouped)
+        .fixedSize(horizontal: false, vertical: true)
         .onAppear { launchesAtLogin = model.launchesAtLogin }
     }
 }
@@ -108,6 +178,7 @@ struct ShieldSettings: View {
             }
         }
         .formStyle(.grouped)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -160,6 +231,7 @@ struct LockSettings: View {
             }
         }
         .formStyle(.grouped)
+        .fixedSize(horizontal: false, vertical: true)
         .confirmationDialog("Lock your rules?", isPresented: $confirms) {
             Button("Lock") { model.lockRules(until: duration.end) }
         } message: {
@@ -172,6 +244,8 @@ struct PrivacySettings: View {
     @Environment(AppModel.self) private var model
     @State private var confirmsDelete = false
 
+    @State private var exportDays = 7
+    @State private var exporting = false
     var body: some View {
         Form {
             Section {
@@ -195,12 +269,57 @@ struct PrivacySettings: View {
                 Button("Delete All History\u{2026}", role: .destructive) { confirmsDelete = true }
                     .foregroundStyle(.red)
             }
+            Section("Export") {
+                Picker("Export history", selection: $exportDays) {
+                    Text("Last 7 days").tag(7)
+                    Text("Last 30 days").tag(30)
+                    Text("All history").tag(0)
+                }
+                Button(exporting ? "Exporting…" : "Export CSV…") { exportHistory() }
+                    .disabled(exporting)
+                Text("Your CSV includes time, apps, domains, surfaces, categories and matched rules.")
+                    .font(Theme.Font.caption).foregroundStyle(.secondary)
+            }
+            ScreenTimeImportSettings()
         }
         .formStyle(.grouped)
+        .fixedSize(horizontal: false, vertical: true)
         .confirmationDialog("Delete all history?", isPresented: $confirmsDelete) {
             Button("Delete History", role: .destructive) { model.deleteHistory() }
         } message: {
             Text("Recorded time, interventions and streaks are removed. Rules and settings are kept.")
+        }
+    }
+
+    private func exportHistory() {
+        guard let store = model.store else {
+            RulePackFiles.showError(CocoaError(.fileReadUnknown))
+            return
+        }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.nameFieldStringValue = "Screentime History.csv"
+        panel.prompt = "Export"
+        let days = exportDays
+        let names = Dictionary(model.configuration.rules.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            model.flush()
+            exporting = true
+            Task {
+                do {
+                    try await Task.detached(priority: .userInitiated) {
+                        let now = Date()
+                        let start = days == 0 ? Date.distantPast
+                            : Calendar.current.date(byAdding: .day, value: -(days - 1), to: Calendar.current.startOfDay(for: now))!
+                        let segments = try store.segments(in: DateInterval(start: start, end: now))
+                        try HistoryCSV.encode(segments, ruleNames: names).write(to: url, atomically: true, encoding: .utf8)
+                    }.value
+                } catch {
+                    RulePackFiles.showError(error)
+                }
+                exporting = false
+            }
         }
     }
 }
@@ -232,6 +351,7 @@ struct UpdateSettings: View {
             }
         }
         .formStyle(.grouped)
+        .fixedSize(horizontal: false, vertical: true)
         .onAppear { automatic = updater.automaticallyChecksForUpdates }
     }
 }

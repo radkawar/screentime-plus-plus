@@ -40,6 +40,7 @@ struct TargetComposer: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            .accessibilityLabel("Target Kind")
 
             Group {
                 switch kind {
@@ -196,6 +197,7 @@ struct TargetComposer: View {
             }
             .pickerStyle(.radioGroup)
             .labelsHidden()
+            .accessibilityLabel("App and Website Category")
             let sites = CategoryCatalog.domains(in: category)
             Text(
                 "Every installed app that declares itself as \(category.title.lowercased()), plus sites such as "

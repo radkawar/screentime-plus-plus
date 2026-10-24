@@ -29,9 +29,15 @@ struct ScreentimeApp: App {
         }
         .menuBarExtraStyle(.window)
 
+        Window("This Week", id: "weekly-review") {
+            WeeklyReviewSheet().environment(delegate.model)
+        }
+        .defaultSize(width: 680, height: 760)
+
         Settings {
             SettingsView(updater: delegate.updater.updater).environment(delegate.model)
         }
+        .windowResizability(.contentSize)
     }
 }
 
@@ -40,14 +46,14 @@ private struct MenuBarLabel: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Group {
+        let goal = TimeInterval(model.configuration.settings.dailyGoalMinutes) * 60
+        let fraction = goal > 0 ? model.today.report.distractingSeconds / goal : 0
+        HStack(spacing: Theme.Space.xs) {
+            MenuBarRing(fraction: fraction)
             if let focus = model.activeFocus {
-                Label(Format.countdown(focus.end.timeIntervalSince(model.now)), systemImage: "moon.fill")
-                    .labelStyle(.titleAndIcon)
+                Text(Format.countdown(focus.end.timeIntervalSince(model.now)))
                     .monospacedDigit()
-            } else {
-                Image(systemName: model.shieldPresentation == nil ? "hourglass" : "hourglass.tophalf.filled")
-                    .accessibilityLabel("Screentime++")
+                    .accessibilityLabel("Focus, \(Format.spokenDuration(focus.end.timeIntervalSince(model.now))) remaining")
             }
         }
         // The status item always exists, so it is where AppKit code (reopen
@@ -187,10 +193,22 @@ private struct SidebarStatus: View {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    let model = AppModel()
+    let model: AppModel = {
+        FocusKeepaliveAgent.exitIfAlreadyRunning()
+        return AppModel()
+    }()
     let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
 
+    override init() {
+        super.init()
+        AppModel.shared = model
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls { RulePackFiles.open(url, model: model) }
+    }
 
     /// Opening Screentime++ again (Finder, Spotlight, Dock) shows the main window
     /// even when it was closed and only the menu bar item remained.

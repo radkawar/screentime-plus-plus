@@ -13,8 +13,8 @@ public struct SQLiteError: Error, CustomStringConvertible {
 final class SQLiteDatabase {
     private var handle: OpaquePointer?
 
-    init(path: String) throws {
-        let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
+    init(path: String, readOnly: Bool = false) throws {
+        let flags = (readOnly ? SQLITE_OPEN_READONLY : SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE) | SQLITE_OPEN_FULLMUTEX
         let status = sqlite3_open_v2(path, &handle, flags, nil)
         guard status == SQLITE_OK else {
             let message = handle.map { String(cString: sqlite3_errmsg($0)) } ?? "open failed"
@@ -22,9 +22,11 @@ final class SQLiteDatabase {
             throw SQLiteError(code: status, message: message)
         }
         sqlite3_busy_timeout(handle, 2_000)
-        try execute("PRAGMA journal_mode=WAL")
-        try execute("PRAGMA synchronous=NORMAL")
-        try execute("PRAGMA foreign_keys=ON")
+        if !readOnly {
+            try execute("PRAGMA journal_mode=WAL")
+            try execute("PRAGMA synchronous=NORMAL")
+            try execute("PRAGMA foreign_keys=ON")
+        }
     }
 
     deinit {

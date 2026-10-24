@@ -47,6 +47,15 @@ through macOS Accessibility, and everything is decided on this Mac.
 - Inspector: what the engine sees right now and what each rule decides.
 - Menu bar: today against your goal, one-click Focus, and a press-and-hold
   safety valve that pauses every rule for 15 minutes (unavailable while locked).
+- Weekly review: the last seven days against the seven before, with optional
+  notifications (review ready, session ending, 80% of your goal).
+- Shortcuts and Siri: Start Focus, End Focus, Pause Rules and Today's Summary as
+  App Intents, so Raycast and keyboard shortcuts can drive them too.
+- A locked Focus survives a force quit: a small helper relaunches Screentime++
+  until the session ends. Focus can always be extended by 15 minutes.
+- Firefox and Zen tabs are blanked behind a shield too, not just Safari and Chromium.
+- Per-app idle rules, rule packs as `.stpack` files, history export as CSV, and
+  a one-time import of the app history macOS keeps locally.
 
 ## Install
 

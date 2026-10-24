@@ -53,12 +53,32 @@ targets:
       - sdk: AppKit.framework
       - sdk: ApplicationServices.framework
 
+  ScreentimeGuard:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Sources/ScreentimeGuard
+    settings:
+      base:
+        PRODUCT_NAME: screentime-guard
+        PRODUCT_BUNDLE_IDENTIFIER: dev.screentimepp.guard
+        SKIP_INSTALL: YES
+    dependencies:
+      - target: ScreentimeCore
+      - sdk: AppKit.framework
+      - sdk: libsqlite3.tbd
+
   ScreentimeApp:
     type: application
     productName: Screentime++
     platform: macOS
     sources:
       - path: Sources/ScreentimeApp
+      - path: Config/dev.screentimepp.keepalive.plist
+        buildPhase:
+          copyFiles:
+            destination: wrapper
+            subpath: Contents/Library/LaunchAgents
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.screentimepp.app
@@ -74,6 +94,11 @@ targets:
     dependencies:
       - target: ScreentimeCore
         link: true
+      - target: ScreentimeGuard
+        embed: true
+        codeSign: true
+        copy:
+          destination: executables
       - package: Sparkle
       - sdk: libsqlite3.tbd
       - sdk: AppKit.framework

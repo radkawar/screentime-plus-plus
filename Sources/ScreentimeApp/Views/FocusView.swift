@@ -56,6 +56,9 @@ struct FocusView: View {
                 }
             }
             .frame(maxWidth: 360, alignment: .leading)
+            Button("Extend 15 min") { model.extendFocus(minutes: 15) }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
             if focus.isLocked {
                 Label("This session can\u{2019}t be ended early.", systemImage: "lock.fill")
                     .font(Theme.Font.caption).foregroundStyle(.secondary)
@@ -143,6 +146,7 @@ struct FocusView: View {
 struct FocusArc: View {
     let progress: Double
     let remaining: TimeInterval
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -151,12 +155,12 @@ struct FocusArc: View {
                 .trim(from: 0, to: max(0.001, progress))
                 .stroke(Theme.accent, style: StrokeStyle(lineWidth: 10, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-                .animation(.linear(duration: 1), value: progress)
+                .animation(reduceMotion ? nil : .linear(duration: 1), value: progress)
             VStack(spacing: 2) {
                 Text(Format.countdown(remaining))
                     .font(Theme.Font.display(48))
                     .monospacedDigit()
-                    .contentTransition(.numericText(countsDown: true))
+                    .contentTransition(reduceMotion ? .identity : .numericText(countsDown: true))
                 Text("remaining").font(Theme.Font.caption).foregroundStyle(.secondary)
             }
         }

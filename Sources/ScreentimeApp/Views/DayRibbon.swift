@@ -64,8 +64,9 @@ struct DayRibbon: View {
             }
         }
         .accessibilityElement()
-        .accessibilityLabel("Today\u{2019}s activity across 24 hours")
+        .accessibilityLabel("Activity across 24 hours on \(day.formatted(date: .complete, time: .omitted))")
         .accessibilityValue(accessibilitySummary)
+        .accessibilityAddTraits(.isImage)
     }
 
     private var dayStart: Date { Calendar.current.startOfDay(for: day) }

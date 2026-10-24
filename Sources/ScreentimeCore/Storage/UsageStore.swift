@@ -155,6 +155,10 @@ public final class UsageStore: @unchecked Sendable {
                 opens INTEGER NOT NULL,
                 PRIMARY KEY(day, rule_id)
             );
+            CREATE TABLE IF NOT EXISTS history_imports(
+                source TEXT PRIMARY KEY,
+                imported_at REAL NOT NULL
+            );
             PRAGMA user_version = 1;
             """)
     }
@@ -219,6 +223,52 @@ public final class UsageStore: @unchecked Sendable {
                 }
             }
             return result
+        }
+    }
+
+    // MARK: One-time historical import
+
+    public func hasImportedScreenTime() throws -> Bool {
+        try locked {
+            var found = false
+            try database.query("SELECT 1 FROM history_imports WHERE source = 'knowledge-app-usage'") { _ in found = true }
+            return found
+        }
+    }
+
+    /// Inserts only history before our first recorded segment. The marker and all
+    /// rows commit together, so a failed import can be retried without duplicates.
+    /// Deleting/pruning history deliberately keeps the one-time marker.
+    public func importScreenTime(_ segments: [Segment], now: Date = Date()) throws -> Int {
+        try locked {
+            var count = 0
+            try database.transaction {
+                var imported = false
+                try database.query("SELECT 1 FROM history_imports WHERE source = 'knowledge-app-usage'") { _ in imported = true }
+                guard !imported else { throw ScreenTimeImportError.alreadyImported }
+                var cutoff = now.timeIntervalSince1970
+                try database.query("SELECT start FROM segments ORDER BY start LIMIT 1") { cutoff = min(cutoff, $0.double(0)) }
+                var previousEnd = -Double.infinity
+                for segment in segments.sorted(by: { $0.start < $1.start }) {
+                    let start = max(segment.start.timeIntervalSince1970, previousEnd)
+                    let end = min(segment.end.timeIntervalSince1970, cutoff)
+                    guard start.isFinite, end.isFinite, end > start, !segment.bundleID.isEmpty else { continue }
+                    try database.run(
+                        """
+                        INSERT INTO segments(start, end, bundle_id, app_name, domain, surface, category, rule_id)
+                        VALUES (?, ?, ?, ?, NULL, NULL, ?, NULL)
+                        """,
+                        [.real(start), .real(end), .text(segment.bundleID), .text(segment.appName),
+                         .text(CategoryCatalog.category(bundleID: segment.bundleID, domain: nil).rawValue)])
+                    previousEnd = end
+                    count += 1
+                }
+                guard count > 0 else { throw ScreenTimeImportError.noHistory }
+                try database.run(
+                    "INSERT INTO history_imports(source, imported_at) VALUES ('knowledge-app-usage', ?)",
+                    [.real(now.timeIntervalSince1970)])
+            }
+            return count
         }
     }
 

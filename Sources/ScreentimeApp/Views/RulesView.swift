@@ -5,6 +5,7 @@ struct RulesView: View {
     @Environment(AppModel.self) private var model
     @State private var editing: Rule?
     @State private var showsTemplates = false
+    @State private var showsExport = false
 
     var body: some View {
         let rules = model.configuration.rules
@@ -63,6 +64,14 @@ struct RulesView: View {
         .navigationTitle("Rules")
         .toolbar {
             ToolbarItem {
+                Menu {
+                    Button("Import Rule Pack…") { RulePackFiles.chooseImport(model: model) }
+                    Button("Export Rules…") { showsExport = true }.disabled(rules.isEmpty)
+                } label: {
+                    Label("Rule Pack Files", systemImage: "square.and.arrow.up")
+                }
+            }
+            ToolbarItem {
                 Button {
                     showsTemplates = true
                 } label: {
@@ -76,6 +85,9 @@ struct RulesView: View {
                 showsTemplates = false
                 editing = template.make()
             }
+        }
+        .sheet(isPresented: $showsExport) {
+            RulePackExportPicker(rules: rules)
         }
         .sheet(item: $editing) { rule in
             RuleEditor(rule: rule, isNew: !rules.contains { $0.id == rule.id })
@@ -129,6 +141,7 @@ private struct RuleRow: View {
             .toggleStyle(.switch)
             .controlSize(.small)
             .labelsHidden()
+            .accessibilityLabel("Enable \(rule.name)")
             .disabled(!isEditable)
             .help(isEditable ? "Turn this rule on or off" : "Locked")
         }
@@ -155,6 +168,7 @@ struct TemplatePicker: View {
     }
 
     @State private var tab: Tab
+    @State private var previewing: RuleTemplate?
 
     init(initialTab: Tab = .packs, choose: @escaping (RuleTemplate) -> Void) {
         _tab = State(initialValue: initialTab)
@@ -171,6 +185,7 @@ struct TemplatePicker: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+                .accessibilityLabel("Library Section")
                 .fixedSize()
             }
             Text(
@@ -184,7 +199,10 @@ struct TemplatePicker: View {
                     switch tab {
                     case .packs:
                         ForEach(RulePack.all) { pack in
-                            PackRow(pack: pack, isAdded: isAdded(pack)) { model.add(pack: pack) }
+                            PackRow(
+                                pack: pack, isAdded: isAdded(pack),
+                                add: { model.add(pack: pack) },
+                                preview: { previewing = $0 })
                             if pack.id != RulePack.all.last?.id { Divider().padding(.leading, 48) }
                         }
                     case .rules:
@@ -203,6 +221,15 @@ struct TemplatePicker: View {
         }
         .padding(Theme.Space.l)
         .frame(width: 540)
+        .sheet(item: $previewing) { template in
+            LibraryRulePreview(template: template) {
+                model.save(rule: template.make())
+                previewing = nil
+            } customize: {
+                previewing = nil
+                choose(template)
+            }
+        }
     }
 
     private func isAdded(_ pack: RulePack) -> Bool {
@@ -212,7 +239,7 @@ struct TemplatePicker: View {
 
     private func templateRow(_ template: RuleTemplate) -> some View {
         Button {
-            choose(template)
+            previewing = template
         } label: {
             HStack(spacing: Theme.Space.m) {
                 LibrarySymbol(symbol: template.symbol)
@@ -228,6 +255,7 @@ struct TemplatePicker: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Preview \(template.title)")
     }
 }
 
@@ -235,6 +263,7 @@ private struct PackRow: View {
     let pack: RulePack
     let isAdded: Bool
     let add: () -> Void
+    let preview: (RuleTemplate) -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: Theme.Space.m) {
@@ -245,7 +274,11 @@ private struct PackRow: View {
                     .fixedSize(horizontal: false, vertical: true)
                 FlowLayout(spacing: 6) {
                     ForEach(pack.templates) { template in
-                        Chip(title: template.title, symbol: template.symbol)
+                        Button { preview(template) } label: {
+                            Chip(title: template.title, symbol: template.symbol)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Preview \(template.title)")
                     }
                 }
                 .padding(.top, 2)
@@ -261,6 +294,7 @@ private struct PackRow: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                     .frame(minWidth: 64)
+                    .accessibilityLabel("Add \(pack.title) Pack")
             }
         }
         .padding(.vertical, 10)
@@ -269,12 +303,69 @@ private struct PackRow: View {
 
 private struct LibrarySymbol: View {
     let symbol: String
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         Image(systemName: symbol)
             .font(.system(size: 15))
             .foregroundStyle(Theme.accent)
             .frame(width: 32, height: 32)
-            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(Theme.accentSoft(contrast), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .accessibilityHidden(true)
+    }
+}
+
+struct LibraryRulePreview: View {
+    @Environment(\.dismiss) private var dismiss
+    let template: RuleTemplate
+    let add: () -> Void
+    let customize: () -> Void
+
+    var body: some View {
+        let rule = template.make()
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            Text(template.title).font(Theme.Font.title).accessibilityAddTraits(.isHeader)
+            Text(template.subtitle).font(Theme.Font.body).foregroundStyle(.secondary)
+            ScrollView {
+                VStack(alignment: .leading, spacing: Theme.Space.m) {
+                    SectionTitle(title: "Targets")
+                    ForEach(rule.targets) { target in
+                        Label(target.displayName, systemImage: target.symbol)
+                            .font(Theme.Font.body)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if !rule.exceptions.isEmpty {
+                        SectionTitle(title: "Except")
+                        ForEach(rule.exceptions) { target in
+                            Label(target.displayName, systemImage: target.symbol).font(Theme.Font.body)
+                        }
+                    }
+                    SectionTitle(title: "Schedule")
+                    Text(schedule(rule)).font(Theme.Font.body)
+                    SectionTitle(title: "Response")
+                    Text(rule.summary).font(Theme.Font.body)
+                    RuleShieldPreview(rule: rule)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            HStack {
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Spacer()
+                Button("Customize…", action: customize)
+                Button("Add Rule", action: add)
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(Theme.Space.l)
+        .frame(width: 480, height: 640)
+    }
+
+    private func schedule(_ rule: Rule) -> String {
+        switch rule.schedule {
+        case .always: "All the time"
+        case .duringFocus: "Only during Focus"
+        case .windows(let windows): windows.map(\.summary).joined(separator: "\n")
+        }
     }
 }

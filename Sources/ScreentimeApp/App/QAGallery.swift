@@ -44,18 +44,47 @@
             }
             open("Library Packs", size: CGSize(width: 540, height: 600), env(AnyView(TemplatePicker(initialTab: .packs) { _ in })))
             open("Library Rules", size: CGSize(width: 540, height: 600), env(AnyView(TemplatePicker(initialTab: .rules) { _ in })))
+            open(
+                "Today First Day", size: CGSize(width: 780, height: 560),
+                env(AnyView(TodayFirstDayState(appName: "Safari", browse: {}).padding(Theme.Space.xl))))
+            open(
+                "Editor Shield Preview", size: CGSize(width: 420, height: 360),
+                env(AnyView(RuleShieldPreview(rule: slack).padding(Theme.Space.l))))
+            open(
+                "Library Rule Preview", size: CGSize(width: 480, height: 640),
+                env(AnyView(LibraryRulePreview(template: .mindfulSocial, add: {}, customize: {}))))
+            open(
+                "Increased Contrast", size: CGSize(width: 540, height: 600),
+                env(AnyView(TemplatePicker(initialTab: .packs) { _ in })),
+                appearance: NSAppearance(named: .accessibilityHighContrastAqua))
+            open(
+                "Weekly Review", size: CGSize(width: 680, height: 800),
+                AnyView(NavigationStack { WeeklyReviewView(review: .gallery) }))
 
             let panes: [(String, AnyView)] = [
                 ("Settings General", AnyView(GeneralSettings())),
                 ("Settings Shields", AnyView(ShieldSettings())),
+                ("Settings Idle", AnyView(Form { IdleSettings() }.formStyle(.grouped))),
+                ("Settings Screen Time Import", AnyView(Form { ScreenTimeImportSettings() }.formStyle(.grouped))),
                 ("Settings Lock", AnyView(LockSettings())),
-                ("Settings Privacy", AnyView(PrivacySettings())),
+                ("Settings Privacy & Data", AnyView(PrivacySettings())),
+                ("Settings Notifications", AnyView(NotificationSettings())),
                 ("Settings Updates", AnyView(UpdateSettings(updater: updater))),
             ]
             for (title, pane) in panes {
                 open(title, size: CGSize(width: 520, height: 520), env(AnyView(pane.frame(width: 520))))
             }
+            open(
+                "Settings Search", size: CGSize(width: 620, height: 400),
+                env(AnyView(SettingsView(updater: updater, initialSearch: "history"))))
+            open(
+                "Import Rule Pack", size: CGSize(width: 520, height: 440),
+                env(AnyView(RulePackImportPreview(rules: [RuleTemplate.mindfulSocial.make(), RuleTemplate.windDown.make()]))))
+            open(
+                "Export Rules", size: CGSize(width: 480, height: 440),
+                env(AnyView(RulePackExportPicker(rules: model.configuration.rules))))
             open("Menu Bar", size: CGSize(width: 320, height: 360), env(AnyView(MenuBarView())))
+            open("Menu Bar Goal Ring", size: CGSize(width: 440, height: 240), env(AnyView(MenuBarRingGallery())))
             open(
                 "Focus Arc", size: CGSize(width: 360, height: 360),
                 AnyView(FocusArc(progress: 0.62, remaining: 31 * 60 + 12).frame(width: 260, height: 260).padding(48)))
@@ -106,13 +135,14 @@
             ]
         }
 
-        private static func open(_ title: String, size: CGSize, _ view: AnyView) {
+        private static func open(_ title: String, size: CGSize, _ view: AnyView, appearance: NSAppearance? = nil) {
             let offset = CGFloat(windows.count % 12) * 24
             let window = NSWindow(
                 contentRect: NSRect(x: 60 + offset, y: 60 + offset, width: size.width, height: size.height),
                 styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
             window.title = "QA \(title)"
             window.isReleasedWhenClosed = false
+            window.appearance = appearance
             let hosting = NSHostingView(rootView: view)
             // The window owns its size; a hosting view that also drives window
             // size extrema can loop AppKit's constraint pass.

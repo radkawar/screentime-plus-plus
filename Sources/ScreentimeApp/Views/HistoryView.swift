@@ -8,6 +8,7 @@ struct HistoryView: View {
     @State private var report: UsageReport?
     @State private var interventions: [InterventionRecord] = []
     @State private var selectedDay: Date?
+    @State private var showsWeeklyReview = false
 
     enum Range: Int, CaseIterable, Identifiable {
         case week = 7
@@ -42,10 +43,16 @@ struct HistoryView: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+                .accessibilityLabel("History Date Range")
                 .frame(width: 180)
+            }
+            ToolbarItem {
+                Button("This Week", systemImage: "calendar") { showsWeeklyReview = true }
+                    .buttonStyle(.borderless)
             }
         }
         .task(id: range) { await load() }
+        .sheet(isPresented: $showsWeeklyReview) { WeeklyReviewSheet().environment(model) }
     }
 
     private func load() async {

@@ -58,13 +58,31 @@ One per surface, built at 120 percent:
   requires a press-and-hold whose ring fills over two seconds, so overrides are
   deliberate rather than reflexive.
 - Focus: a single green arc that drains as the session runs.
-- Menu bar: the same ribbon in miniature, so the status item reads at a glance.
+- Menu bar: a 16 pt goal ring in the status item (amber once over goal), and
+  the day ribbon in miniature inside the panel.
 
 ## Motion
 
 Short, explanatory transitions only (shield appear, ring fill, arc drain).
 Respect Reduce Motion. No looping decoration. The shield must never flicker:
 it is shown on a positive match and hidden only on a positive non-match.
+
+## Previews and accessibility
+
+Before any activity is recorded, Today explains the report, shows the app being
+watched, and opens the Library. The rule editor and Library rule details share
+a non-interactive, scaled rendering of the real shield; previews never start
+enforcement or a countdown. Track rules explain why no shield is shown.
+
+Custom controls expose their labels and selection state to VoiceOver. Chips
+and hold controls use minimum rather than fixed text heights. Theme tracks,
+hairlines and soft fills strengthen with Increased Contrast; shared controls
+also resolve SwiftUI's contrast environment for previews. Reduce Motion keeps
+countdowns factual without animated transitions.
+
+Inspector page text keeps its selection and scroll position between clock
+ticks. It updates only for a new source or capture, inside a stable scroll area.
+
 
 ## Copy
 
@@ -90,3 +108,6 @@ SCREENTIME_DATA_DIR=/tmp/screentime-qa \
 Every sheet, settings pane, the menu bar panel, each shield variant and the
 toast open in titled windows ("QA ..."), so each can be captured by window ID
 (`screencapture -l`). Add `-NSRequiresAquaSystemAppearance YES` for light mode.
+
+The gallery includes Today First Day, Editor Shield Preview, Library Rule
+Preview and Increased Contrast windows.

@@ -36,6 +36,13 @@ struct MenuBarView: View {
             nowLine
             Divider()
             focusControls
+            if [1, 2].contains(Calendar.current.component(.weekday, from: model.now)) {
+                Button("This Week", systemImage: "calendar") {
+                    openWindow(id: "weekly-review")
+                    NSApp.activate()
+                }
+                .buttonStyle(.borderless)
+            }
             Divider()
             HStack {
                 Button("Open Screentime++") {
@@ -50,12 +57,14 @@ struct MenuBarView: View {
                     Image(systemName: "gearshape")
                 }
                 .help("Settings")
+                .accessibilityLabel("Settings")
                 Button {
                     NSApp.terminate(nil)
                 } label: {
                     Image(systemName: "power")
                 }
                 .help("Quit Screentime++")
+                .accessibilityLabel("Quit Screentime++")
             }
             .buttonStyle(.borderless)
         }
@@ -96,14 +105,18 @@ struct MenuBarView: View {
         if let focus = model.activeFocus {
             HStack {
                 Image(systemName: "moon.fill").foregroundStyle(Theme.accent)
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     Text(focus.title).font(Theme.Font.body.weight(.medium))
                     Text("\(Format.countdown(focus.end.timeIntervalSince(model.now))) left\(focus.isLocked ? " \u{00B7} Locked" : "")")
                         .font(Theme.Font.caption).foregroundStyle(.secondary).monospacedDigit()
+                    Button("Extend 15 min") { model.extendFocus(minutes: 15) }
+                        .buttonStyle(.borderless)
+                        .font(Theme.Font.caption)
                 }
                 Spacer()
                 if !focus.isLocked {
                     Button("End") { model.endFocus() }
+                        .accessibilityLabel("End Focus")
                 }
             }
         } else {
@@ -115,6 +128,7 @@ struct MenuBarView: View {
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                         .help("Block your focus rules for \(minutes) minutes")
+                        .accessibilityLabel("Start Focus for \(minutes) minutes")
                 }
             }
         }

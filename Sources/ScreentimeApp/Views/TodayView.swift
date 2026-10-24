@@ -4,6 +4,9 @@ import SwiftUI
 struct TodayView: View {
     @Environment(AppModel.self) private var model
     @State private var showsAllItems = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var showsLibrary = false
+    @State private var editing: Rule?
 
     var body: some View {
         let summary = model.today
@@ -13,10 +16,17 @@ struct TodayView: View {
                 if !model.isAccessibilityTrusted {
                     PermissionCallout()
                 }
-                headline(report: report, streak: summary.streakDays)
-                DayRibbon(segments: report.segments, day: model.now, now: model.now, height: 44)
-                stats(summary)
-                items(report)
+                if report.totalSeconds == 0 && report.segments.isEmpty {
+                    TodayFirstDayState(
+                        appName: model.live.context?.appName,
+                        isWatching: model.live.status == .active,
+                        browse: { showsLibrary = true })
+                } else {
+                    headline(report: report, streak: summary.streakDays)
+                    DayRibbon(segments: report.segments, day: model.now, now: model.now, height: 44)
+                    stats(summary)
+                    items(report)
+                }
                 if !summary.interventions.isEmpty {
                     interventions(summary.interventions)
                 }
@@ -28,6 +38,13 @@ struct TodayView: View {
         }
         .navigationTitle("Today")
         .onAppear { model.reloadToday() }
+        .sheet(isPresented: $showsLibrary) {
+            TemplatePicker { template in
+                showsLibrary = false
+                editing = template.make()
+            }
+        }
+        .sheet(item: $editing) { RuleEditor(rule: $0, isNew: true) }
     }
 
     // MARK: Headline
@@ -54,7 +71,7 @@ struct TodayView: View {
             Text(Format.duration(distracting, showSeconds: true))
                 .font(Theme.Font.display(64))
                 .monospacedDigit()
-                .contentTransition(.numericText())
+                .contentTransition(reduceMotion ? .identity : .numericText())
                 .accessibilityLabel("\(Format.spokenDuration(distracting)) of distracting time")
             Text(
                 "distracting, of \(Format.duration(report.totalSeconds)) on screen. "
@@ -75,13 +92,12 @@ struct TodayView: View {
     private func stats(_ summary: TodaySummary) -> some View {
         let report = summary.report
         let shown = summary.interventions.count
-        return HStack(spacing: Theme.Space.xl) {
+        return FlowLayout(spacing: Theme.Space.xl, lineSpacing: Theme.Space.m) {
             Stat(value: "\(report.sessions.count)", label: "pickups")
             Stat(value: Format.duration(report.longestSession), label: "longest stretch")
             Stat(
                 value: shown == 0 ? "None" : "\(summary.turnedBack) of \(shown)",
                 label: shown == 0 ? "interventions" : "times you turned back")
-            Spacer(minLength: 0)
         }
     }
 
@@ -107,8 +123,8 @@ struct TodayView: View {
                     }
                 }
                 if items.count > 8 {
-                    Button(showsAllItems ? "Show fewer" : "Show all \(items.count)") {
-                        withAnimation(.easeOut(duration: 0.2)) { showsAllItems.toggle() }
+                    Button(showsAllItems ? "Show Fewer" : "Show All \(items.count)") {
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { showsAllItems.toggle() }
                     }
                     .buttonStyle(.borderless)
                     .font(Theme.Font.body)
@@ -129,6 +145,45 @@ struct TodayView: View {
                 }
             }
         }
+    }
+}
+
+/// The empty day is a useful starting point, not a zero-valued report.
+struct TodayFirstDayState: View {
+    let appName: String?
+    var isWatching = true
+    let browse: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.l) {
+            Text("Your day starts here.")
+                .font(Theme.Font.display(40))
+                .accessibilityAddTraits(.isHeader)
+            Text("As you use your Mac, your apps, sites and time on screen appear here. Your day ribbon will show when you used them.")
+                .font(Theme.Font.body)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Label(
+                isWatching ? "Watching: \(appName ?? "your next app")" : "Ready when you return to an app",
+                systemImage: isWatching ? "eye" : "clock")
+                .font(Theme.Font.body.weight(.medium))
+                .foregroundStyle(Theme.accent)
+                .padding(Theme.Space.m)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.Radius.panel))
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                Text("Choose what counts as distracting.")
+                    .font(Theme.Font.heading)
+                Text("Add a rule from the Library to track, pause or block an app, site or page. You can change it later in Rules.")
+                    .font(Theme.Font.body)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Browse the Library…", action: browse)
+                    .buttonStyle(.borderedProminent)
+                    .padding(.top, Theme.Space.xs)
+            }
+        }
+        .padding(.vertical, Theme.Space.l)
     }
 }
 

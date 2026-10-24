@@ -31,6 +31,9 @@ struct RuleEditor: View {
                 whenSection
                 responseSection
                 limitsSection
+                Section("Shield Preview") {
+                    RuleShieldPreview(rule: rule)
+                }
             }
             .formStyle(.grouped)
             .disabled(!isEditable)
@@ -71,6 +74,7 @@ struct RuleEditor: View {
             .buttonStyle(.plain)
             .menuIndicator(.hidden)
             .help("Choose a symbol")
+            .accessibilityLabel("Choose Rule Symbol")
             .disabled(!isEditable)
             VStack(alignment: .leading, spacing: 2) {
                 TextField("Name", text: $rule.name)
@@ -231,6 +235,7 @@ struct RuleEditor: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            .accessibilityLabel("Rule Response")
             switch rule.response {
             case .track:
                 Text("Count time and opens. Nothing appears unless a limit below is reached.")
@@ -268,6 +273,7 @@ struct RuleEditor: View {
                             binding.wrappedValue.sessionMinutes = next.sorted()
                         }
                         .buttonStyle(PillButtonStyle(isSelected: isOn, compact: true))
+                        .accessibilityLabel("\(minutes) minute session")
                     }
                 }
             }
@@ -339,6 +345,91 @@ struct RuleEditor: View {
         "hand.raised", "wind", "moon", "brain.head.profile", "play.rectangle", "bubble.left", "newspaper",
         "bag", "gamecontroller", "suit.club", "eye.slash", "flame", "leaf", "book", "timer", "bell.slash",
     ]
+}
+
+/// Uses the real shield without running its clock or enabling enforcement actions.
+/// The sample bypasses scheduling and exceptions so edits always remain visible.
+struct RuleShieldPreview: View {
+    @Environment(AppModel.self) private var model
+    let rule: Rule
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            if case .track = rule.response {
+                Label("No shield while tracking", systemImage: "chart.bar")
+                    .font(Theme.Font.heading)
+                Text("Your time and opens are counted. A shield appears only if you reach a limit.")
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(.secondary)
+            } else if let presentation = samplePresentation {
+                ShieldCard(presentation: presentation, coordinator: model.shields, isPreview: true)
+                    .frame(width: 640, height: 560)
+                    .scaleEffect(0.45, anchor: .topLeading)
+                    .frame(width: 288, height: 252, alignment: .topLeading)
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel))
+                    .allowsHitTesting(false)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Shield preview for \(presentation.subject)")
+                    .accessibilityValue("\(rule.message ?? defaultMessage). \(rule.summary)")
+                    .frame(maxWidth: .infinity)
+                Text("Preview only. Your shield appears over the matching app or page.")
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, Theme.Space.s)
+    }
+
+    private var defaultMessage: String {
+        if case .pause = rule.response { return "Take a breath." }
+        return "Not this one."
+    }
+
+    private var samplePresentation: ShieldPresentation? {
+        var context = ForegroundContext(bundleID: "preview", appName: "Your app", pid: 0, isBrowser: false)
+        if let target = rule.targets.first {
+            switch target {
+            case .app(let bundleID, let name):
+                context.bundleID = bundleID
+                context.appName = name
+            case .website(let domain):
+                context.isBrowser = true
+                context.appName = "Safari"
+                context.url = URL(string: "https://\(domain)")
+            case .urlPattern(let pattern):
+                context.isBrowser = true
+                context.appName = "Safari"
+                let address = pattern.replacingOccurrences(of: "*", with: "example")
+                context.url = URL(string: address.hasPrefix("http") ? address : "https://\(address)")
+            case .content(let content):
+                context.appName =
+                    content.apps.first.map { id in
+                        NSWorkspace.shared.urlForApplication(withBundleIdentifier: id)
+                            .map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") }
+                            ?? RuleTemplate.knownAppName(bundleID: id) ?? id
+                    } ?? "Your page"
+                context.pageTitle = content.phrases.joined(separator: ", ")
+            case .category(let category):
+                if let domain = CategoryCatalog.domains(in: category).first {
+                    context.isBrowser = true
+                    context.appName = "Safari"
+                    context.url = URL(string: "https://\(domain)")
+                } else {
+                    context.appName = category.title
+                }
+            }
+        }
+        var sample = rule
+        sample.isEnabled = true
+        sample.schedule = .always
+        sample.exceptions = []
+        sample.limits = UsageLimits()
+        sample.targets = [.app(bundleID: context.bundleID, name: context.appName)]
+        guard let intervention = PolicyEngine.evaluate(
+            context: context, content: nil, rules: [sample], runtime: RuleRuntime(), now: Date()
+        ).intervention else { return nil }
+        return ShieldPresentation(intervention: intervention, context: context, now: Date())
+    }
 }
 
 private struct TargetRows: View {
@@ -414,19 +505,21 @@ private struct ScheduleWindowEditor: View {
                     } label: {
                         Text(Calendar.current.veryShortWeekdaySymbols[day - 1])
                             .font(Theme.Font.label)
-                            .frame(width: 24, height: 24)
+                            .frame(minWidth: 24, minHeight: 24)
                             .foregroundStyle(isOn ? Color.white : .primary)
                             .background(Circle().fill(isOn ? Theme.accent : Theme.track))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(Calendar.current.weekdaySymbols[day - 1])
                     .accessibilityValue(isOn ? "On" : "Off")
+                    .accessibilityAddTraits(isOn ? .isSelected : [])
                 }
                 Spacer()
                 if canRemove {
                     Button(action: remove) { Image(systemName: "minus.circle.fill").foregroundStyle(.secondary) }
                         .buttonStyle(.plain)
                         .help("Remove this window")
+                        .accessibilityLabel("Remove Time Window")
                 }
             }
             HStack {

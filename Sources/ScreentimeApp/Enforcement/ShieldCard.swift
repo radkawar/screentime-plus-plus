@@ -7,7 +7,7 @@ import SwiftUI
 struct ShieldCard: View {
     @Bindable var presentation: ShieldPresentation
     let coordinator: ShieldCoordinator
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var isPreview = false
 
     var body: some View {
         ZStack {
@@ -16,7 +16,7 @@ struct ShieldCard: View {
                 Spacer(minLength: Theme.Space.l)
                 header
                 if let pause = presentation.pause {
-                    PauseBody(presentation: presentation, pause: pause, coordinator: coordinator)
+                    PauseBody(presentation: presentation, pause: pause, coordinator: coordinator, isPreview: isPreview)
                 } else if let block = presentation.block {
                     BlockBody(presentation: presentation, block: block, coordinator: coordinator)
                 }
@@ -110,12 +110,14 @@ private struct PauseBody: View {
     @Bindable var presentation: ShieldPresentation
     let pause: PauseIntervention
     let coordinator: ShieldCoordinator
+    var isPreview = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: Theme.Space.l) {
             BreathingRing(
                 remaining: presentation.remaining, total: TimeInterval(pause.waitSeconds),
-                isWaiting: presentation.phase == .waiting)
+                isWaiting: presentation.phase == .waiting, isPreview: isPreview)
             if pause.asksIntention {
                 TextField("What are you here for?", text: $presentation.intention)
                     .textFieldStyle(.roundedBorder)
@@ -146,7 +148,7 @@ private struct PauseBody: View {
                 .foregroundStyle(Theme.accent)
             }
         }
-        .animation(.easeOut(duration: 0.2), value: presentation.phase)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: presentation.phase)
     }
 }
 
@@ -204,15 +206,16 @@ struct BreathingRing: View {
     let remaining: TimeInterval
     let total: TimeInterval
     let isWaiting: Bool
+    var isPreview = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: !isWaiting || reduceMotion)) { timeline in
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: !isWaiting || reduceMotion || isPreview)) { timeline in
             let phase = breathPhase(timeline.date)
             ZStack {
                 Circle()
                     .fill(Theme.accentSoft)
-                    .scaleEffect(reduceMotion || !isWaiting ? 0.82 : 0.62 + 0.3 * phase)
+                    .scaleEffect(reduceMotion || !isWaiting || isPreview ? 0.82 : 0.62 + 0.3 * phase)
                 Circle()
                     .stroke(Theme.track, lineWidth: 3)
                 Circle()
@@ -259,6 +262,7 @@ struct HoldToConfirmButton: View {
 
     @State private var isPressing = false
     @State private var progress: Double = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: Theme.Space.s) {
@@ -275,7 +279,7 @@ struct HoldToConfirmButton: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal, inset ? Theme.Space.m : 0)
-        .frame(height: 32)
+        .frame(minHeight: 32)
         .contentShape(Capsule())
         .background(Capsule().fill(isPressing ? Theme.track : .clear))
         .onLongPressGesture(minimumDuration: duration, maximumDistance: 30) {
@@ -284,14 +288,16 @@ struct HoldToConfirmButton: View {
         } onPressingChanged: { pressing in
             isPressing = pressing
             if pressing {
-                withAnimation(.linear(duration: duration)) { progress = 1 }
+                withAnimation(reduceMotion ? nil : .linear(duration: duration)) { progress = 1 }
             } else {
-                withAnimation(.easeOut(duration: 0.2)) { progress = 0 }
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { progress = 0 }
             }
         }
         .accessibilityElement()
         .accessibilityLabel(title)
         .accessibilityAddTraits(.isButton)
+        .accessibilityValue(isPressing ? "Confirming" : "Not confirmed")
+        .accessibilityHint("Activate to confirm this action.")
         .accessibilityAction { action() }
         .help("Press and hold for two seconds")
     }

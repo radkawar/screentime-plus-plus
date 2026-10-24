@@ -12,7 +12,7 @@ usage() {
   cat <<EOF
 Usage: $0 [--identity NAME_OR_SHA1] [--team-id ID] Screentime++.app
 
-Signs Sparkle helpers and the outer app with timestamped Hardened Runtime.
+Signs the Focus guard, Sparkle helpers and the outer app with timestamped Hardened Runtime.
 EOF
 }
 
@@ -79,6 +79,7 @@ SPARKLE_INSTALLER="$SPARKLE_VERSION/XPCServices/Installer.xpc"
 SPARKLE_AUTOUPDATE="$SPARKLE_VERSION/Autoupdate"
 DEVELOPMENT_DYLIB="$APP/Contents/MacOS/Screentime++.debug.dylib"
 PREVIEW_DYLIB="$APP/Contents/MacOS/__preview.dylib"
+FOCUS_GUARD="$APP/Contents/MacOS/screentime-guard"
 
 if ! command -v codesign >/dev/null 2>&1; then
   echo "error: required signing tool is unavailable: codesign" >&2
@@ -114,6 +115,7 @@ require_executable() {
 
 require_directory "$APP" "app bundle"
 require_executable "$APP/Contents/MacOS/Screentime++" "app executable"
+require_executable "$FOCUS_GUARD" "Focus guard"
 require_directory "$SPARKLE_FRAMEWORK" "embedded Sparkle framework"
 require_directory "$SPARKLE_UPDATER" "Sparkle updater"
 require_directory "$SPARKLE_DOWNLOADER" "Sparkle downloader service"
@@ -152,6 +154,7 @@ sign_sparkle_artifact() {
 }
 
 # Sign all nested code before the bundle that seals it.
+sign_artifact "$FOCUS_GUARD" "dev.screentimepp.guard"
 sign_sparkle_artifact "$SPARKLE_UPDATER" \
   "org.sparkle-project.Sparkle.Updater"
 sign_sparkle_artifact "$SPARKLE_DOWNLOADER" \
@@ -200,6 +203,7 @@ if [[ -n "$EXPECTED_TEAM_ID" && "$APP_TEAM_ID" != "$EXPECTED_TEAM_ID" ]]; then
 fi
 
 for artifact in \
+  "$FOCUS_GUARD" \
   "$SPARKLE_UPDATER" \
   "$SPARKLE_DOWNLOADER" \
   "$SPARKLE_INSTALLER" \
@@ -221,7 +225,7 @@ for artifact in "$DEVELOPMENT_DYLIB" "$PREVIEW_DYLIB"; do
   fi
 done
 
-for artifact in "$APP" "$SPARKLE_UPDATER" "$SPARKLE_DOWNLOADER" "$SPARKLE_INSTALLER" "$SPARKLE_AUTOUPDATE" "$SPARKLE_VERSION" "$DEVELOPMENT_DYLIB" "$PREVIEW_DYLIB"; do
+for artifact in "$APP" "$FOCUS_GUARD" "$SPARKLE_UPDATER" "$SPARKLE_DOWNLOADER" "$SPARKLE_INSTALLER" "$SPARKLE_AUTOUPDATE" "$SPARKLE_VERSION" "$DEVELOPMENT_DYLIB" "$PREVIEW_DYLIB"; do
   [[ -e "$artifact" ]] || continue
   details="$(/usr/bin/codesign -dvvv "$artifact" 2>&1)"
   /usr/bin/grep -q '^Authority=Developer ID Application:' <<<"$details"

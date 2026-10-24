@@ -57,6 +57,7 @@ final class AppModel {
     @ObservationIgnored private let tracker: UsageTracker?
     @ObservationIgnored private let monitor = ActivityMonitor()
     @ObservationIgnored let shields = ShieldCoordinator()
+    @ObservationIgnored let notifications = Notifications()
     @ObservationIgnored private var lastReload = Date.distantPast
     @ObservationIgnored private var reloadTask: Task<Void, Never>?
 
@@ -99,6 +100,8 @@ final class AppModel {
         applyMonitorConfiguration()
         monitor.start()
         reloadToday()
+        notifications.reconcile(configuration: configuration, today: today)
+        FocusKeepaliveAgent.shared.synchronize(focus: configuration.focus)
     }
 
     // MARK: Sampling
@@ -260,6 +263,9 @@ final class AppModel {
             await MainActor.run { [weak self] in
                 guard !Task.isCancelled else { return }
                 self?.today = summary
+                if let self {
+                    self.notifications.reconcile(configuration: self.configuration, today: summary)
+                }
             }
         }
     }
@@ -392,6 +398,15 @@ final class AppModel {
         commit(config)
     }
 
+    /// Adding time only tightens a session, so locked sessions can be extended too.
+    func extendFocus(minutes: Int) {
+        guard minutes > 0, var focus = activeFocus, focus.isActive(at: Date()) else { return }
+        focus.end = focus.end.addingTimeInterval(TimeInterval(minutes) * 60)
+        var config = configuration
+        config.focus = focus
+        commit(config)
+    }
+
     func completeSetup(templates: [RuleTemplate], goalMinutes: Int) {
         var config = configuration
         if !config.settings.hasCompletedSetup {
@@ -438,8 +453,10 @@ final class AppModel {
 
     private func commit(_ config: AppConfiguration) {
         configuration = config
+        notifications.reconcile(configuration: config, today: today)
         do {
             try configStore?.save(config)
+            FocusKeepaliveAgent.shared.synchronize(focus: config.focus)
         } catch {
             storageProblem = "Your rules couldn\u{2019}t be saved. (\(error.localizedDescription))"
         }
@@ -452,7 +469,8 @@ final class AppModel {
         let settings = configuration.settings
         let needsText = settings.inspectsPageText && configuration.rules.contains { $0.isEnabled && $0.needsPageText }
         monitor.configure(
-            needsContent: needsText || isInspectorOpen, idleThreshold: TimeInterval(settings.idleThresholdSeconds))
+            needsContent: needsText || isInspectorOpen, idleThreshold: TimeInterval(settings.idleThresholdSeconds),
+            appIdleOverrides: settings.appIdleOverrides ?? [:])
     }
 
     /// While the Inspector is visible, read page text even without content rules.

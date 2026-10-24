@@ -208,11 +208,12 @@ final class ShieldCoordinator {
             presentation: presentation, pid: context.pid, bundleID: context.bundleID,
             ruleID: intervention.match.rule.id, subject: context.subject, originalURL: nil, recordID: nil)
         active.recordID = onPresent?(presentation, context)
+        self.active = active
 
         if context.isBrowser, parksTabs, let url = context.url, BrowserController.canPark(bundleID: context.bundleID) {
-            active.originalURL = url
+            self.active?.originalURL = url
             presentation.isParked = true
-            browser.setFrontTabAddress(BrowserController.blankAddress, bundleID: context.bundleID) {
+            browser.setFrontTabAddress(BrowserController.blankAddress, bundleID: context.bundleID, pid: context.pid) {
                 [weak self] accepted in
                 guard let self, !accepted, self.active?.presentation.id == presentation.id else { return }
                 // Automation was refused: fall back to cover-only.
@@ -220,7 +221,6 @@ final class ShieldCoordinator {
                 presentation.isParked = false
             }
         }
-        self.active = active
 
         window.show(
             ShieldCard(presentation: presentation, coordinator: self),
@@ -253,11 +253,12 @@ final class ShieldCoordinator {
         self.active = nil
         window.hide()
         onTrack?(nil)
+        browser.cancelPendingNavigation()
 
         switch resolution {
         case .continued, .overridden, .released:
             if let original = active.originalURL {
-                browser.setFrontTabAddress(original.absoluteString, bundleID: active.bundleID) { _ in }
+                browser.setFrontTabAddress(original.absoluteString, bundleID: active.bundleID, pid: active.pid) { _ in }
             }
         case .turnedBack, .declined, .closedAutomatically:
             break

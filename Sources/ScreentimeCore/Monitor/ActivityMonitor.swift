@@ -39,6 +39,7 @@ public final class ActivityMonitor: @unchecked Sendable {
     private var needsContent = false
     private var contentInterval: TimeInterval = 4
     private var idleThreshold: TimeInterval = 120
+    private var appIdleOverrides: [String: AppIdleOverride] = [:]
     private var lastContent: PageContent?
     private var trackedPID: pid_t?
     private var lastFrame: CGRect?
@@ -117,10 +118,13 @@ public final class ActivityMonitor: @unchecked Sendable {
         observers.removeAll()
     }
 
-    public func configure(needsContent: Bool, idleThreshold: TimeInterval) {
+    public func configure(
+        needsContent: Bool, idleThreshold: TimeInterval, appIdleOverrides: [String: AppIdleOverride]
+    ) {
         queue.async { [self] in
             self.needsContent = needsContent
             self.idleThreshold = max(30, idleThreshold)
+            self.appIdleOverrides = appIdleOverrides
             if !needsContent { lastContent = nil }
         }
     }
@@ -166,7 +170,7 @@ public final class ActivityMonitor: @unchecked Sendable {
             } else if let id = app.bundleIdentifier, Self.transientBundleIDs.contains(id) {
                 // A permission prompt over the shielded app: not use, and not leaving.
                 state = .idle
-            } else if isIdle(frontmostPID: app.processIdentifier) {
+            } else if isIdle(bundleID: app.bundleIdentifier) {
                 state = .idle
             } else {
                 let reading = reader.read(app)
@@ -195,13 +199,13 @@ public final class ActivityMonitor: @unchecked Sendable {
         return fresh
     }
 
-    private func isIdle(frontmostPID: pid_t) -> Bool {
+    private func isIdle(bundleID: String?) -> Bool {
         let anyInput = CGEventType(rawValue: ~0)!
         let seconds = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: anyInput)
-        guard seconds >= idleThreshold else { return false }
-        // Watching a video is use, not idleness. Browsers often hold the
-        // assertion from a helper process, so any holder counts.
-        return !Self.displaySleepIsPrevented()
+        return IdlePolicy.isIdle(
+            secondsSinceInput: seconds, globalThreshold: idleThreshold,
+            override: bundleID.flatMap { appIdleOverrides[$0] },
+            displaySleepIsPrevented: Self.displaySleepIsPrevented())
     }
 
     static func displaySleepIsPrevented() -> Bool {

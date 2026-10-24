@@ -63,9 +63,11 @@ Watch 22m").
    switching cannot cause a show/hide loop. It appears on a positive match and
    hides only on a positive non-match; transient AX timeouts keep the current
    state.
-3. **Park the tab.** For scriptable browsers (Safari, Chrome family, Arc) the
-   blocked tab is replaced with a blank page so media stops and the page cannot
-   be used behind the shield. Continuing restores the original address. Other
+3. **Park the tab.** Safari, Chrome-family browsers and Arc use Apple Events
+   to replace a blocked tab with a blank page. Firefox, Firefox Developer
+   Edition and Zen use Accessibility keystrokes instead, only while the
+   browser is frontmost. Continuing, overriding or releasing the shield
+   restores the original address without activating another app. Other
    browsers fall back to the shield plus Go Back / Close Tab.
 4. **Content stays in memory.** Page text is matched and discarded. The
    database stores time, bundle IDs, domains and surfaces; never titles, URLs
@@ -76,6 +78,45 @@ Watch 22m").
    count toward limits.
 7. **Overrides are deliberate.** A one-minute override needs a two-second
    press-and-hold, is logged, and breaks the streak. Locked Focus disables it.
+8. **Locked Focus survives force-quit.** During a locked session, a bundled
+   LaunchAgent runs a small supervisor that reopens the app without activation
+   if it disappears. The supervisor reads the saved session in
+   `~/Library/Application Support/Screentime++/configuration.json` and stops
+   at expiry; the app unregisters it when no locked session remains.
+   Background-item approval in System Settings is required. QA copies using
+   `SCREENTIME_DATA_DIR` or `--qa-gallery` never register or unregister it.
+   A separate supervisor also covers sessions started in an app opened by
+   Finder: launchd cannot adopt that existing app process. No static
+   `PathState` flag is used because launchd does not expand home-directory
+   placeholders in bundled plists.
+
+### Weekly review and reminders
+
+History → **This Week** compares the latest seven calendar days (including
+today so far) with the seven before: distracting and total time, days inside
+the current daily goal, turned-back rate, top apps and sites, pause counts,
+the longest recorded streak, and your written intentions. Unrecorded days
+do not count as successful days. The menu bar offers the review on Sundays
+and Mondays.
+
+Settings → **Notifications** offers three opt-in reminders: a weekly review
+on Sunday at 18:00 local time, one minute remaining in a pause session, and
+80% of today's distracting-time goal (at most once per day). Permission is
+requested only when you enable a reminder. Disabling a reminder cancels its
+pending notifications; extending a session replaces its old reminder.
+
+### Portable rules and history
+
+Rules can be exported together or individually as a `.stpack` JSON file from
+Rules. Opening a pack shows a preview before adding it. Imports assign fresh
+rule IDs and skip names already present; existing locked rules are unchanged.
+The versioned format contains rules only, never history or settings.
+
+Settings → Privacy & Data exports foreground segments for the last 7 days,
+30 days, or all retained history as RFC 4180 CSV. Dates are UTC ISO 8601;
+durations are seconds. Matched rules use their current name, or their UUID if
+the rule was deleted. Exported history is a separate local file and is not
+removed when you delete history in the app.
 
 ## Non-goals (for now)
 
@@ -83,4 +124,6 @@ Watch 22m").
 - Blocking at the network layer for apps without a window (background
   downloads, CLI tools).
 - Parental control. This is a tool you point at yourself; it raises the cost
-  of a reflex, it is not tamper-proof against an administrator.
+  of a reflex, it is not tamper-proof against an administrator. An administrator
+  can unload the Focus LaunchAgent; disabling background items or changing the
+  saved configuration also defeats relaunch protection.
