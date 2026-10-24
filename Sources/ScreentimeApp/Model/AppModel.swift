@@ -384,6 +384,10 @@ final class AppModel {
         Rule(
             name: "Focus blocklist", symbol: "moon",
             targets: [.category(.social), .category(.entertainment), .category(.shopping), .category(.games)],
+            // Music in the background is part of focusing, not a distraction from it.
+            exceptions: [
+                .app(bundleID: "com.apple.Music", name: "Music"), .app(bundleID: "com.spotify.client", name: "Spotify"),
+            ],
             schedule: .duringFocus, response: .track)
     }
 

@@ -51,7 +51,7 @@ struct TodayView: View {
                         .help("Days with distracting time inside your goal and no overrides")
                 }
             }
-            Text(Format.duration(distracting))
+            Text(Format.duration(distracting, showSeconds: true))
                 .font(Theme.Font.display(64))
                 .monospacedDigit()
                 .contentTransition(.numericText())
