@@ -246,11 +246,16 @@ public struct FocusSession: Codable, Hashable, Sendable, Identifiable {
     public var start: Date
     public var end: Date
     public var ruleIDs: [UUID]
+    public var categories: [UsageCategory]?
+    public var targets: [Target]?
+    /// Identifies an automatic occurrence without changing manual-session semantics.
+    public var automationID: String?
     /// Locked sessions cannot be ended early and suppress overrides.
     public var isLocked: Bool
 
     public init(
-        id: UUID = UUID(), title: String, start: Date, end: Date, ruleIDs: [UUID], isLocked: Bool
+        id: UUID = UUID(), title: String, start: Date, end: Date, ruleIDs: [UUID], isLocked: Bool,
+        categories: [UsageCategory]? = nil, targets: [Target]? = nil, automationID: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -258,6 +263,9 @@ public struct FocusSession: Codable, Hashable, Sendable, Identifiable {
         self.end = end
         self.ruleIDs = ruleIDs
         self.isLocked = isLocked
+        self.categories = categories
+        self.targets = targets
+        self.automationID = automationID
     }
 
     public func isActive(at date: Date) -> Bool { date >= start && date < end }

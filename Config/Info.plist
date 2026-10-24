@@ -34,6 +34,8 @@
 	<string>Copyright (c) 2026 Screentime++ contributors. MIT License.</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Screentime++ replaces a blocked tab with a blank page so it stops playing, and restores it when you choose to continue.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Screentime++ reads event titles and times only when you enable calendar Focus, to start and end your chosen profile during matching events.</string>
 	<key>SUFeedURL</key>
 	<string>https://radkawar.github.io/screentime-plus-plus/appcast.xml</string>
 	<key>SUPublicEDKey</key>
@@ -75,6 +77,17 @@
 			<string>Owner</string>
 			<key>LSItemContentTypes</key>
 			<array><string>dev.screentimepp.rulepack</string></array>
+		</dict>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>dev.screentimepp.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array><string>screentimepp</string></array>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
 		</dict>
 	</array>
 </dict>

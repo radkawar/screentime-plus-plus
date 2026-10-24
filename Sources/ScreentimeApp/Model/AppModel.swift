@@ -51,6 +51,9 @@ final class AppModel {
     private(set) var now = Date()
     private(set) var storageProblem: String?
     private(set) var isAccessibilityTrusted = AccessibilityPermission.isTrusted
+    var itemDetail: DraftSubject?
+    var itemDetailInterval: DateInterval?
+    let focusCalendar = FocusCalendar()
 
     @ObservationIgnored let store: UsageStore?
     @ObservationIgnored private let configStore: ConfigStore?
@@ -58,6 +61,7 @@ final class AppModel {
     @ObservationIgnored private let monitor = ActivityMonitor()
     @ObservationIgnored let shields = ShieldCoordinator()
     @ObservationIgnored let notifications = Notifications()
+    @ObservationIgnored private let nudges = Nudges()
     @ObservationIgnored private var lastReload = Date.distantPast
     @ObservationIgnored private var reloadTask: Task<Void, Never>?
 
@@ -110,6 +114,7 @@ final class AppModel {
         now = sample.date
         isAccessibilityTrusted = AccessibilityPermission.isTrusted
         pruneExpired(now: sample.date)
+        reconcileFocusAutomation(at: sample.date)
         live.sampledAt = sample.date
 
         switch sample.state {
@@ -149,6 +154,7 @@ final class AppModel {
             tracker?.record(context: nil, matches: [], isShielded: false, at: sample.date)
         }
         shieldPresentation = shields.presentation
+        nudges.handle(sample, model: self)
         if sample.date.timeIntervalSince(lastReload) >= 30 { reloadToday() }
     }
 
@@ -156,7 +162,7 @@ final class AppModel {
         let usage = tracker?.ruleUsage ?? [:]
         return RuleRuntime(
             usageSeconds: usage.mapValues(\.seconds), opens: usage.mapValues(\.opens),
-            grants: configuration.grants, focus: configuration.focus)
+            grants: configuration.grants, focus: rulesPausedUntil == nil ? configuration.focus : nil)
     }
 
     func usage(for rule: Rule) -> RuleDayUsage {
@@ -265,6 +271,9 @@ final class AppModel {
                 self?.today = summary
                 if let self {
                     self.notifications.reconcile(configuration: self.configuration, today: summary)
+                    WidgetPublisher.publish(
+                        report: summary.report,
+                        goalSeconds: TimeInterval(self.configuration.settings.dailyGoalMinutes * 60))
                 }
             }
         }
@@ -313,6 +322,42 @@ final class AppModel {
         }.value
     }
 
+    func presentItemDetail(_ subject: DraftSubject) {
+        presentItemDetail(subject, in: nil)
+    }
+
+    func presentItemDetail(_ subject: DraftSubject, in interval: DateInterval?) {
+        ruleDraft = nil
+        editingRule = nil
+        showsRuleLibrary = false
+        itemDetailInterval = interval
+        itemDetail = subject
+        openMainWindow?()
+        NSApp.activate()
+    }
+
+    func history(in interval: DateInterval) async -> (UsageReport, [InterventionRecord]) {
+        guard let store else { return (UsageReport(segments: [], interval: interval), []) }
+        tracker?.flush()
+        return await Task.detached(priority: .userInitiated) {
+            let segments = (try? store.segments(in: interval)) ?? []
+            let interventions = (try? store.interventions(in: interval)) ?? []
+            return (UsageReport(segments: segments, interval: interval), interventions)
+        }.value
+    }
+
+    func history(on day: Date) async -> TodaySummary {
+        let start = Calendar.current.startOfDay(for: day)
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: start) ?? start
+        let (report, interventions) = await history(in: DateInterval(start: start, end: end))
+        return TodaySummary(report: report, interventions: interventions, streakDays: 0)
+    }
+
+    func history(for subject: DraftSubject, in interval: DateInterval) async -> UsageReport {
+        let (report, _) = await history(in: interval)
+        return report.filtered(for: subject)
+    }
+
     // MARK: Configuration
 
     var rulesLocked: Bool { configuration.settings.rulesAreLocked(at: now) }
@@ -338,19 +383,52 @@ final class AppModel {
         commit(config)
     }
 
-    func delete(rule: Rule) {
-        guard canEdit(rule) else { return }
+    func delete(rule: Rule, undoManager: UndoManager? = nil) {
+        guard let index = configuration.rules.firstIndex(where: { $0.id == rule.id }),
+            canEdit(configuration.rules[index])
+        else { return }
+        let original = configuration.rules[index]
+        let grants = configuration.grants.filter { $0.ruleID == original.id }
+        undoManager?.registerUndo(withTarget: self) { [weak undoManager] model in
+            model.restoreDeletedRule(original, at: index, grants: grants, undoManager: undoManager)
+        }
+        undoManager?.setActionName("Delete Rule")
         var config = configuration
-        config.rules.removeAll { $0.id == rule.id }
-        config.grants.removeAll { $0.ruleID == rule.id }
+        config.rules.remove(at: index)
+        config.grants.removeAll { $0.ruleID == original.id }
+        commit(config)
+        Toast.show(
+            title: "Deleted “\(original.name)”",
+            detail: undoManager == nil ? "Its history stays in History." : "⌘Z to undo",
+            symbol: "arrow.uturn.backward")
+    }
+
+    private func restoreDeletedRule(_ rule: Rule, at index: Int, grants: [AccessGrant], undoManager: UndoManager?) {
+        guard canEdit(rule), !configuration.rules.contains(where: { $0.id == rule.id }) else { return }
+        undoManager?.registerUndo(withTarget: self) { [weak undoManager] model in
+            model.delete(rule: rule, undoManager: undoManager)
+        }
+        undoManager?.setActionName("Delete Rule")
+        var config = configuration
+        config.rules.insert(rule, at: min(index, config.rules.count))
+        config.grants.append(contentsOf: grants.filter { $0.until > now })
         commit(config)
     }
 
-    func setEnabled(_ enabled: Bool, rule: Rule) {
-        guard canEdit(rule) else { return }
-        var updated = rule
+    func setEnabled(_ enabled: Bool, rule: Rule, undoManager: UndoManager? = nil) {
+        guard let original = configuration.rules.first(where: { $0.id == rule.id }),
+            canEdit(original), original.isEnabled != enabled
+        else { return }
+        undoManager?.registerUndo(withTarget: self) { [weak undoManager] model in
+            model.setEnabled(original.isEnabled, rule: original, undoManager: undoManager)
+        }
+        undoManager?.setActionName(enabled ? "Enable Rule" : "Disable Rule")
+        var updated = original
         updated.isEnabled = enabled
         save(rule: updated)
+        Toast.show(
+            title: "\(enabled ? "Enabled" : "Disabled") “\(original.name)”",
+            detail: undoManager == nil ? "" : "⌘Z to undo", symbol: "arrow.uturn.backward")
     }
 
     func updateSettings(_ change: (inout AppSettings) -> Void) {
@@ -377,17 +455,76 @@ final class AppModel {
         }.map(\.id)
     }
 
-    func startFocus(minutes: Int, ruleIDs: [UUID], locked: Bool, title: String = "Focus") {
-        guard activeFocus == nil, !ruleIDs.isEmpty else { return }
+    func startFocus(minutes: Int, ruleIDs: [UUID], locked: Bool, title: String = "Focus",
+                    categories: [UsageCategory] = [], targets: [Target] = []) {
+        startFocus(profile: FocusProfile(name: title, minutes: minutes, isLocked: locked,
+                                       categories: categories, targets: targets, ruleIDs: ruleIDs))
+    }
+
+    var focusProfiles: [FocusProfile] { configuration.focusProfiles ?? [] }
+
+    var defaultFocusProfile: FocusProfile {
+        focusProfiles.first { $0.id == configuration.defaultFocusProfileID }
+            ?? focusProfiles.first ?? FocusProfile(name: "Focus")
+    }
+
+    func saveFocusProfile(_ profile: FocusProfile, makeDefault: Bool = false) {
         var config = configuration
-        let start = Date()
-        config.focus = FocusSession(
-            title: title, start: start, end: start.addingTimeInterval(TimeInterval(minutes * 60)), ruleIDs: ruleIDs,
-            isLocked: locked)
-        // A new focus session supersedes running pause sessions for its rules.
-        config.grants.removeAll { ruleIDs.contains($0.ruleID) }
-        // Choosing to focus ends any pause of the rules.
+        var profiles = config.focusProfiles ?? []
+        if let index = profiles.firstIndex(where: { $0.id == profile.id }) {
+            profiles[index] = profile
+            profiles[index].consumedOccurrences = config.focusProfiles?[index].consumedOccurrences
+        } else {
+            profiles.append(profile)
+        }
+        config.focusProfiles = profiles
+        if makeDefault || config.defaultFocusProfileID == nil { config.defaultFocusProfileID = profile.id }
+        commit(config)
+    }
+
+    func deleteFocusProfile(_ profile: FocusProfile) {
+        var config = configuration
+        config.focusProfiles?.removeAll { $0.id == profile.id }
+        if config.defaultFocusProfileID == profile.id { config.defaultFocusProfileID = config.focusProfiles?.first?.id }
+        commit(config)
+    }
+
+    func startFocus(profile: FocusProfile, minutes: Int? = nil, locked: Bool? = nil) {
+        guard activeFocus == nil, profile.hasSelection, (minutes ?? profile.minutes) > 0 else { return }
+        var chosen = profile
+        chosen.minutes = minutes ?? profile.minutes
+        chosen.isLocked = locked ?? profile.isLocked
+        var config = configuration
+        config.focus = chosen.session(start: Date())
+        config.grants.removeAll { chosen.ruleIDs.contains($0.ruleID) }
         config.settings.rulesPausedUntil = nil
+        commit(config)
+    }
+
+    private func reconcileFocusAutomation(at date: Date) {
+        let events = focusCalendar.occurrences(profiles: focusProfiles, now: date)
+        let decision = FocusAutomation.decision(profiles: focusProfiles, current: configuration.focus,
+                                                events: events, now: date)
+        var config = configuration
+        switch decision {
+        case .none: return
+        case .stop: config.focus = nil
+        case .updateEnd(let end):
+            config.focus?.end = end
+            if let occurrenceID = config.focus?.automationID,
+               let index = config.focusProfiles?.firstIndex(where: { $0.consumedOccurrences?[occurrenceID] != nil }) {
+                config.focusProfiles?[index].consumedOccurrences?[occurrenceID] = end
+            }
+        case .start(let profileID, let occurrenceID, let end):
+            guard let index = config.focusProfiles?.firstIndex(where: { $0.id == profileID }),
+                  let profile = config.focusProfiles?[index] else { return }
+            config.focus = profile.session(start: date, end: end, automationID: occurrenceID)
+            var consumed = profile.consumedOccurrences?.filter { $0.value > date } ?? [:]
+            consumed[occurrenceID] = end
+            config.focusProfiles?[index].consumedOccurrences = consumed
+            config.grants.removeAll { profile.ruleIDs.contains($0.ruleID) }
+            config.settings.rulesPausedUntil = nil
+        }
         commit(config)
     }
 
@@ -402,6 +539,8 @@ final class AppModel {
     func extendFocus(minutes: Int) {
         guard minutes > 0, var focus = activeFocus, focus.isActive(at: Date()) else { return }
         focus.end = focus.end.addingTimeInterval(TimeInterval(minutes) * 60)
+        // An explicit extension takes over from the automatic end time.
+        focus.automationID = nil
         var config = configuration
         config.focus = focus
         commit(config)
@@ -467,7 +606,9 @@ final class AppModel {
 
     private func applyMonitorConfiguration() {
         let settings = configuration.settings
-        let needsText = settings.inspectsPageText && configuration.rules.contains { $0.isEnabled && $0.needsPageText }
+        let needsText = settings.inspectsPageText
+            && (configuration.rules.contains { $0.isEnabled && $0.needsPageText }
+                || (configuration.focus?.targets?.contains(where: \.needsPageText) ?? false))
         monitor.configure(
             needsContent: needsText || isInspectorOpen, idleThreshold: TimeInterval(settings.idleThresholdSeconds),
             appIdleOverrides: settings.appIdleOverrides ?? [:])
@@ -480,6 +621,48 @@ final class AppModel {
 
     /// Opens the main window; provided by the always-present menu bar label.
     @ObservationIgnored var openMainWindow: (() -> Void)?
+
+    var ruleDraft: Rule?
+    var editingRule: Rule?
+    var requestedDestination: Destination?
+    var showsRuleLibrary = false
+
+    func navigate(to destination: Destination) {
+        requestedDestination = destination
+        openMainWindow?()
+        NSApp.activate()
+    }
+
+    func presentRuleDraft(_ rule: Rule) {
+        itemDetail = nil
+        editingRule = nil
+        showsRuleLibrary = false
+        ruleDraft = rule
+        navigate(to: .rules)
+    }
+
+    func editRule(id: UUID) {
+        guard let rule = configuration.rules.first(where: { $0.id == id }) else { return }
+        itemDetail = nil
+        ruleDraft = nil
+        showsRuleLibrary = false
+        editingRule = rule
+        navigate(to: .rules)
+    }
+
+    func newRuleFromForeground() {
+        if let context = live.context, !context.bundleID.isEmpty,
+            context.bundleID != Bundle.main.bundleIdentifier
+        {
+            presentRuleDraft(RuleDraft.rule(for: DraftSubject(context: context), kind: .pause))
+        } else {
+            itemDetail = nil
+            ruleDraft = nil
+            editingRule = nil
+            showsRuleLibrary = true
+            navigate(to: .rules)
+        }
+    }
 
     func requestAccessibility() {
         AccessibilityPermission.request()

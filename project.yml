@@ -68,12 +68,35 @@ targets:
       - sdk: AppKit.framework
       - sdk: libsqlite3.tbd
 
+  ScreentimeWidget:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: Sources/ScreentimeWidget
+      - path: Sources/ScreentimeApp/Design/Theme.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.screentimepp.app.widget
+        PRODUCT_NAME: ScreentimeWidget
+        INFOPLIST_FILE: Config/WidgetInfo.plist
+        CODE_SIGN_ENTITLEMENTS: Config/ScreentimeWidget.entitlements
+        APPLICATION_EXTENSION_API_ONLY: YES
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_DEBUG_DYLIB: NO
+        SKIP_INSTALL: YES
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks"
+    dependencies:
+      - target: ScreentimeCore
+      - sdk: SwiftUI.framework
+      - sdk: WidgetKit.framework
+
   ScreentimeApp:
     type: application
     productName: Screentime++
     platform: macOS
     sources:
       - path: Sources/ScreentimeApp
+      - path: Sources/ScreentimeWidget/Shared
       - path: Config/dev.screentimepp.keepalive.plist
         buildPhase:
           copyFiles:
@@ -94,6 +117,9 @@ targets:
     dependencies:
       - target: ScreentimeCore
         link: true
+      - target: ScreentimeWidget
+        embed: true
+        codeSign: true
       - target: ScreentimeGuard
         embed: true
         codeSign: true
@@ -106,6 +132,7 @@ targets:
       - sdk: Charts.framework
       - sdk: ServiceManagement.framework
       - sdk: SwiftUI.framework
+      - sdk: WidgetKit.framework
 
 schemes:
   ScreentimeApp:

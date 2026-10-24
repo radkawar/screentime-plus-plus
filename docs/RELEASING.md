@@ -47,7 +47,7 @@ Scripts/generate-update-feed.sh \
   --tag v0.1.0
 ```
 
-Packaging signs Sparkle inside-out, then the app, using Hardened Runtime and
+Packaging signs the widget, Focus guard and Sparkle inside-out, then the app, using Hardened Runtime and
 secure timestamps. It checks Team IDs, signatures, runtime flags, timestamps,
 and universal executable architectures. It submits a temporary app ZIP,
 staples the app, builds and signs the DMG, submits and staples the DMG, and
@@ -66,6 +66,39 @@ Feed generation refuses unsigned, ad-hoc, unstapled, wrong-team, or
 Gatekeeper-rejected inputs before accessing the update key. It checks the app's
 feed URL and public key, generates archive and feed signatures with pinned,
 checksum-verified Sparkle 2.9.5 tools, and verifies the signed feed.
+
+## Desktop and Notification Center widget
+
+The app embeds `Contents/PlugIns/ScreentimeWidget.appex`. Both targets declare
+`com.apple.security.application-groups = [3UX5N7Y8TY.dev.screentimepp]`; the widget
+also declares `com.apple.security.app-sandbox = true`. The host remains
+non-sandboxed for Accessibility enforcement. The group contains only
+`today-widget.json`: today's distracting/total seconds, goal, category ribbon
+segments, and three leading app/site names. It contains no page titles, full
+URLs, or history database. Isolated data-directory and QA runs never publish it.
+
+This **team-prefixed macOS App Group needs no provisioning profile or portal
+registration**. Apple documents that macOS authorizes these groups by matching
+the identifier's prefix to the signing Team ID:
+[Accessing app group containers — Use app groups that you don't provision](https://developer.apple.com/documentation/xcode/accessing-app-group-containers).
+Apple recommends `group.` identifiers generally, but those require a provisioning
+profile; the team-prefixed form is chosen deliberately for our Developer ID,
+macOS-only distribution. It is not a Keychain access group or a cross-platform
+group. Changing signing teams requires changing both entitlement files and
+`WidgetSnapshot.groupIdentifier`, not just passing a different signing flag.
+
+Both signing scripts sign the extension with its own sandbox/group entitlements
+before sealing the app. Developer ID adds Hardened Runtime and a secure
+timestamp, and verifies the extension's team, entitlements, and signature.
+Packaging checks every Mach-O for arm64 and x86_64, including the extension.
+
+Ad-hoc signatures prove bundle structure and entitlement contents, **not**
+authorization to the team-prefixed container. Before shipping, verify a real
+Developer ID signed/notarized copy on macOS: add both widget sizes to the desktop
+and Notification Center, confirm live data after a summary reload, tap through
+to Today, and confirm the next day never shows yesterday's totals. Verify both
+processes can access the shared group without a provisioning profile or
+unexpected permission prompt. Do not use an ad-hoc build as evidence of this.
 
 ## CI publication
 

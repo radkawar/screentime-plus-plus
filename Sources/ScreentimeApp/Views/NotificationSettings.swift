@@ -10,13 +10,37 @@ struct NotificationSettings: View {
     var body: some View {
         Form {
             Section {
+                Toggle("Time Nudges", isOn: Binding(
+                    get: { model.configuration.settings.timeNudgesEnabled != false },
+                    set: { enabled in model.updateSettings { $0.timeNudgesEnabled = enabled } }
+                ))
+                Picker("Remind After", selection: Binding(
+                    get: { model.configuration.settings.timeNudgeCadence ?? .tenTwentyThirty },
+                    set: { cadence in model.updateSettings { $0.timeNudgeCadence = cadence } }
+                )) {
+                    ForEach(TimeNudgeCadence.allCases, id: \.self) { cadence in
+                        Text(cadence.title).tag(cadence)
+                    }
+                }
+                .disabled(model.configuration.settings.timeNudgesEnabled == false)
+                Toggle("Also for Everything", isOn: Binding(
+                    get: { model.configuration.settings.timeNudgesForEverything == true },
+                    set: { enabled in model.updateSettings { $0.timeNudgesForEverything = enabled } }
+                ))
+                .disabled(model.configuration.settings.timeNudgesEnabled == false)
+            } header: {
+                Text("In-App Nudges")
+            } footer: {
+                Text("Quiet reminders for continuous time on apps and sites covered by your rules, then every 30 minutes. Idle time resets the clock. Pause sessions also get a reminder with 2 minutes left. No sound or notification permission needed.")
+            }
+            Section {
                 notificationToggle("Weekly Review Ready", detail: "Sunday at 18:00, in your local time.", keyPath: \.weeklyReviewNotifications)
                 notificationToggle("Session Ending", detail: "A reminder 1 minute before a pause session ends.", keyPath: \.sessionEndingNotifications)
                 notificationToggle("Daily Goal Reminder", detail: "Once a day when your distracting time reaches 80% of your goal.", keyPath: \.goalNotifications)
             } header: {
                 Text("Notifications")
             } footer: {
-                Text("All reminders are optional and off by default. Enabling one asks macOS for permission.")
+                Text("System notifications are optional and off by default. Enabling one asks macOS for permission.")
             }
             if !authorized {
                 Section {

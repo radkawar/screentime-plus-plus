@@ -173,10 +173,13 @@ struct ProportionBar: View {
 }
 
 struct UsageRow: View {
+    @Environment(AppModel.self) private var model
     let item: UsageTotal
     let maxSeconds: TimeInterval
+    var interval: DateInterval?
 
     var body: some View {
+        Button(action: showDetails) {
         HStack(alignment: .center, spacing: Theme.Space.m) {
             SubjectIcon(bundleID: item.bundleID, domain: item.domain, category: item.category, name: item.title)
             VStack(alignment: .leading, spacing: 5) {
@@ -208,11 +211,29 @@ struct UsageRow: View {
             }
         }
         .padding(.vertical, 6)
+        .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("Pause…") { draft(.pause) }
+            Button("Limit…") { draft(.limit) }
+            Button("Block…") { draft(.block) }
+            Divider()
+            Button("Show Details", action: showDetails)
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(item.title), \(Format.spokenDuration(item.seconds))")
         .accessibilityValue(
             (item.isDistracting ? "Covered by a rule. " : "")
                 + item.surfaces.map { "\($0.name), \(Format.spokenDuration($0.seconds))" }.joined(separator: ". "))
+    }
+
+    private func showDetails() {
+        model.presentItemDetail(DraftSubject(total: item), in: interval)
+    }
+
+    private func draft(_ kind: DraftKind) {
+        model.presentRuleDraft(RuleDraft.rule(for: DraftSubject(total: item), kind: kind))
     }
 }
 

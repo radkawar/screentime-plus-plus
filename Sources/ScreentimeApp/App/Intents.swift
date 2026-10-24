@@ -15,7 +15,7 @@ private enum ScreentimeIntentError: LocalizedError {
     case unavailable
     case invalidMinutes
     case focusAlreadyRunning
-    case noFocusRules
+    case unknownProfile
     case noFocus
     case lockedFocus
     case rulesCannotPause
@@ -25,7 +25,7 @@ private enum ScreentimeIntentError: LocalizedError {
         case .unavailable: "Open Screentime++ before running this shortcut."
         case .invalidMinutes: "Choose a positive number of minutes within the supported range."
         case .focusAlreadyRunning: "You already have a focus session running. Extend it in Screentime++."
-        case .noFocusRules: "Add a Focus-only or enabled Pause rule in Screentime++ first."
+        case .unknownProfile: "Save a profile with that name in Screentime++ first."
         case .noFocus: "You don’t have a focus session running."
         case .lockedFocus: "Your focus session is locked and can’t be ended early."
         case .rulesCannotPause: "You can’t pause rules while your rules or focus session are locked."
@@ -35,14 +35,18 @@ private enum ScreentimeIntentError: LocalizedError {
 
 struct StartFocusIntent: AppIntent {
     static var title: LocalizedStringResource = "Start Focus"
-    static var description = IntentDescription("Block your default focus rules for a timed session.")
+    static var description = IntentDescription("Block distractions using your default focus profile or a named profile.")
     static var openAppWhenRun = false
 
     @Parameter(title: "Minutes") var minutes: Int
     @Parameter(title: "Locked", default: false) var locked: Bool
+    @Parameter(title: "Profile") var profile: String?
 
     static var parameterSummary: some ParameterSummary {
-        Summary("Start Focus for \(\.$minutes) minutes") { \.$locked }
+        Summary("Start Focus for \(\.$minutes) minutes") {
+            \.$locked
+            \.$profile
+        }
     }
 
     init() {}
@@ -57,9 +61,15 @@ struct StartFocusIntent: AppIntent {
         let model = try AppModel.forIntent()
         guard minutes > 0, minutes <= Int.max / 60 else { throw ScreentimeIntentError.invalidMinutes }
         guard model.activeFocus == nil else { throw ScreentimeIntentError.focusAlreadyRunning }
-        let ruleIDs = model.defaultFocusRuleIDs
-        guard !ruleIDs.isEmpty else { throw ScreentimeIntentError.noFocusRules }
-        model.startFocus(minutes: minutes, ruleIDs: ruleIDs, locked: locked)
+        let chosen: FocusProfile
+        if let name = profile?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            guard let match = model.focusProfiles.first(where: { $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame })
+            else { throw ScreentimeIntentError.unknownProfile }
+            chosen = match
+        } else {
+            chosen = model.defaultFocusProfile
+        }
+        model.startFocus(profile: chosen, minutes: minutes, locked: locked || chosen.isLocked)
         return .result(dialog: "Your \(minutes)-minute focus session has started.")
     }
 }

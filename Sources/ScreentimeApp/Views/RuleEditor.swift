@@ -4,10 +4,12 @@ import SwiftUI
 struct RuleEditor: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.undoManager) private var undoManager
     @State private var rule: Rule
     @State private var composing: TargetList?
-    @State private var confirmsDelete = false
+    @State private var showsDetails: Bool
     let isNew: Bool
+    private let windowUndoManager: UndoManager?
 
     enum TargetList: String, Identifiable {
         case targets
@@ -15,9 +17,15 @@ struct RuleEditor: View {
         var id: String { rawValue }
     }
 
-    init(rule: Rule, isNew: Bool) {
+    init(rule: Rule, isNew: Bool, undoManager: UndoManager? = nil) {
         _rule = State(initialValue: rule)
+        if case .windows(let windows) = rule.schedule {
+            _showsDetails = State(initialValue: windows.count != 1)
+        } else {
+            _showsDetails = State(initialValue: false)
+        }
         self.isNew = isNew
+        windowUndoManager = undoManager
     }
 
     private var isEditable: Bool { isNew || model.canEdit(rule) }
@@ -26,11 +34,18 @@ struct RuleEditor: View {
         VStack(spacing: 0) {
             header
             Form {
-                whatSection
-                exceptSection
-                whenSection
-                responseSection
-                limitsSection
+                Section {
+                    RuleSentenceEditor(
+                        rule: $rule, showsDetails: $showsDetails,
+                        addTarget: { composing = .targets }, addException: { composing = .exceptions })
+                }
+                DisclosureGroup("Details", isExpanded: $showsDetails) {
+                    whatSection
+                    exceptSection
+                    whenSection
+                    responseSection
+                    limitsSection
+                }
                 Section("Shield Preview") {
                     RuleShieldPreview(rule: rule)
                 }
@@ -310,19 +325,12 @@ struct RuleEditor: View {
     private var footer: some View {
         HStack {
             if !isNew {
-                Button("Delete Rule", role: .destructive) { confirmsDelete = true }
-                    .foregroundStyle(.red)
-                    .disabled(!isEditable)
-                    .confirmationDialog(
-                        "Delete \u{201C}\(rule.name)\u{201D}?", isPresented: $confirmsDelete
-                    ) {
-                        Button("Delete", role: .destructive) {
-                            model.delete(rule: rule)
-                            dismiss()
-                        }
-                    } message: {
-                        Text("Its history stays in Today and History.")
-                    }
+                Button("Delete Rule", role: .destructive) {
+                    model.delete(rule: rule, undoManager: windowUndoManager ?? undoManager)
+                    dismiss()
+                }
+                .foregroundStyle(.red)
+                .disabled(!isEditable)
             }
             if !isEditable {
                 Label("Locked", systemImage: "lock.fill").font(Theme.Font.caption).foregroundStyle(.secondary)
@@ -490,7 +498,7 @@ private struct TargetRows: View {
     }
 }
 
-private struct ScheduleWindowEditor: View {
+struct ScheduleWindowEditor: View {
     @Binding var window: ScheduleWindow
     let canRemove: Bool
     let remove: () -> Void

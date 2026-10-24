@@ -19,7 +19,7 @@ struct ScreentimeApp: App {
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates\u{2026}") { delegate.updater.updater.checkForUpdates() }
             }
-            CommandGroup(replacing: .newItem) {}
+            NavigationCommands(model: delegate.model)
         }
 
         MenuBarExtra {
@@ -34,10 +34,40 @@ struct ScreentimeApp: App {
         }
         .defaultSize(width: 680, height: 760)
 
+        Window("Inspector", id: "inspector") {
+            InspectorView().environment(delegate.model).tint(Theme.accent)
+                .frame(minWidth: 680, minHeight: 480)
+        }
+        .defaultSize(width: 900, height: 640)
+
         Settings {
             SettingsView(updater: delegate.updater.updater).environment(delegate.model)
         }
         .windowResizability(.contentSize)
+    }
+}
+
+private struct NavigationCommands: Commands {
+    let model: AppModel
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some Commands {
+        CommandGroup(replacing: .newItem) {
+            Button("New Rule from What’s in Front") { model.newRuleFromForeground() }
+                .keyboardShortcut("n")
+        }
+        CommandGroup(after: .sidebar) {
+            Button("Today") { model.navigate(to: .today) }.keyboardShortcut("1")
+            Button("History") { model.navigate(to: .history) }.keyboardShortcut("2")
+            Button("Rules") { model.navigate(to: .rules) }.keyboardShortcut("3")
+            Button("Focus") { model.navigate(to: .focus) }.keyboardShortcut("4")
+        }
+        CommandGroup(after: .help) {
+            Button("Inspector") {
+                openWindow(id: "inspector")
+                NSApp.activate()
+            }
+        }
     }
 }
 
@@ -67,7 +97,6 @@ enum Destination: String, Hashable, CaseIterable, Identifiable {
     case history
     case rules
     case focus
-    case inspector
 
     var id: String { rawValue }
 
@@ -77,7 +106,6 @@ enum Destination: String, Hashable, CaseIterable, Identifiable {
         case .history: "History"
         case .rules: "Rules"
         case .focus: "Focus"
-        case .inspector: "Inspector"
         }
     }
 
@@ -87,7 +115,6 @@ enum Destination: String, Hashable, CaseIterable, Identifiable {
         case .history: "chart.bar"
         case .rules: "hand.raised"
         case .focus: "moon"
-        case .inspector: "text.magnifyingglass"
         }
     }
 }
@@ -95,6 +122,8 @@ enum Destination: String, Hashable, CaseIterable, Identifiable {
 struct MainShell: View {
     @Environment(AppModel.self) private var model
     @SceneStorage("destination") private var destination: Destination = .today
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.undoManager) private var undoManager
 
     var body: some View {
         Group {
@@ -103,12 +132,17 @@ struct MainShell: View {
                     List(selection: Binding(get: { destination }, set: { if let value = $0 { destination = value } })) {
                         Section {
                             ForEach([Destination.today, .history]) { row($0) }
+                            if [1, 2].contains(Calendar.current.component(.weekday, from: model.now)) {
+                                Button {
+                                    openWindow(id: "weekly-review")
+                                } label: {
+                                    Label("This Week", systemImage: "calendar")
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                         Section("Control") {
                             ForEach([Destination.rules, .focus]) { row($0) }
-                        }
-                        Section("Diagnostics") {
-                            row(.inspector)
                         }
                     }
                     .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
@@ -120,7 +154,22 @@ struct MainShell: View {
                 SetupView()
             }
         }
-        .onAppear { NSApp.setActivationPolicy(.regular) }
+        .onAppear {
+            NSApp.setActivationPolicy(.regular)
+            applyNavigation()
+        }
+        .onChange(of: model.requestedDestination) { _, _ in applyNavigation() }
+        .sheet(item: presentation) { item in
+            switch item {
+            case .draft(let rule):
+                RuleEditor(rule: rule, isNew: true, undoManager: undoManager)
+            case .edit(let rule):
+                RuleEditor(rule: rule, isNew: false, undoManager: undoManager)
+            case .detail(let subject): ItemDetailView(subject: subject)
+            case .library:
+                TemplatePicker { model.presentRuleDraft($0.make()) }
+            }
+        }
         .onDisappear { NSApp.setActivationPolicy(.accessory) }
         .overlay(alignment: .top) {
             if let problem = model.storageProblem {
@@ -131,6 +180,42 @@ struct MainShell: View {
                     .padding(.top, Theme.Space.s)
             }
         }
+    }
+
+    private enum Presentation: Identifiable {
+        case draft(Rule), edit(Rule), detail(DraftSubject), library
+
+        var id: String {
+            switch self {
+            case .draft(let rule): "draft:\(rule.id)"
+            case .edit(let rule): "edit:\(rule.id)"
+            case .detail(let subject): "detail:\(subject.bundleID):\(subject.domain ?? ""):\(subject.surface ?? "")"
+            case .library: "library"
+            }
+        }
+    }
+
+    private var presentation: Binding<Presentation?> {
+        Binding {
+            if let rule = model.ruleDraft { return .draft(rule) }
+            if let rule = model.editingRule { return .edit(rule) }
+            if let subject = model.itemDetail { return .detail(subject) }
+            if model.showsRuleLibrary { return .library }
+            return nil
+        } set: { value in
+            if value == nil {
+                model.ruleDraft = nil
+                model.editingRule = nil
+                model.itemDetail = nil
+                model.showsRuleLibrary = false
+            }
+        }
+    }
+
+    private func applyNavigation() {
+        guard let requested = model.requestedDestination else { return }
+        destination = requested
+        model.requestedDestination = nil
     }
 
     private func row(_ destination: Destination) -> some View {
@@ -144,7 +229,6 @@ struct MainShell: View {
         case .history: HistoryView()
         case .rules: RulesView()
         case .focus: FocusView()
-        case .inspector: InspectorView()
         }
     }
 }
@@ -152,6 +236,7 @@ struct MainShell: View {
 /// Bottom of the sidebar: what is happening now, in one line.
 private struct SidebarStatus: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         HStack(spacing: Theme.Space.s) {
@@ -166,6 +251,12 @@ private struct SidebarStatus: View {
         }
         .padding(.horizontal, Theme.Space.m)
         .padding(.vertical, Theme.Space.s)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if NSEvent.modifierFlags.contains(.option) { openWindow(id: "inspector") }
+        }
+        .help("Option-click to open Inspector")
+        .accessibilityAction(named: "Open Inspector") { openWindow(id: "inspector") }
         .accessibilityElement(children: .combine)
     }
 
@@ -207,7 +298,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     func application(_ application: NSApplication, open urls: [URL]) {
-        for url in urls { RulePackFiles.open(url, model: model) }
+        for url in urls {
+            if url.scheme == "screentimepp", url.host == "today" {
+                model.navigate(to: .today)
+            } else {
+                RulePackFiles.open(url, model: model)
+            }
+        }
     }
 
     /// Opening Screentime++ again (Finder, Spotlight, Dock) shows the main window

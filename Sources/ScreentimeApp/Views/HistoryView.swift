@@ -9,6 +9,7 @@ struct HistoryView: View {
     @State private var interventions: [InterventionRecord] = []
     @State private var selectedDay: Date?
     @State private var showsWeeklyReview = false
+    @State private var detailDay: Date?
 
     enum Range: Int, CaseIterable, Identifiable {
         case week = 7
@@ -18,13 +19,23 @@ struct HistoryView: View {
     }
 
     var body: some View {
+        Group {
+            if let detailDay {
+                DayDetailView(day: detailDay, close: { self.detailDay = nil; selectedDay = nil })
+            } else {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.xl) {
                 if let report {
                     let days = report.daily()
-                    summary(days: days)
-                    chart(days: days)
-                    breakdown(report)
+                    if days.filter({ $0.seconds > 0 }).count < 2 {
+                        HistoryFirstDaysState()
+                        recordedDays(days)
+                    } else {
+                        summary(days: days)
+                        chart(days: days)
+                        recordedDays(days)
+                    }
+                    UsageItems(report: report)
                     intentions
                 } else {
                     ProgressView().frame(maxWidth: .infinity, minHeight: 240)
@@ -50,6 +61,11 @@ struct HistoryView: View {
                 Button("This Week", systemImage: "calendar") { showsWeeklyReview = true }
                     .buttonStyle(.borderless)
             }
+        }
+            }
+        }
+        .onChange(of: selectedDay) { _, day in
+            if let day { detailDay = Calendar.current.startOfDay(for: day) }
         }
         .task(id: range) { await load() }
         .sheet(isPresented: $showsWeeklyReview) { WeeklyReviewSheet().environment(model) }
@@ -154,19 +170,24 @@ struct HistoryView: View {
         return first...(calendar.date(byAdding: .day, value: 1, to: last) ?? last)
     }
 
-    private func breakdown(_ report: UsageReport) -> some View {
-        let items = Array(report.items.prefix(12))
-        let maxSeconds = items.first?.seconds ?? 1
-        return VStack(alignment: .leading, spacing: Theme.Space.s) {
-            SectionTitle(title: "Most used", trailing: Format.duration(report.totalSeconds))
-            if items.isEmpty {
-                Text("Nothing recorded in this range.").font(Theme.Font.body).foregroundStyle(.secondary)
-            }
-            VStack(spacing: 0) {
-                ForEach(items) { item in
-                    UsageRow(item: item, maxSeconds: maxSeconds)
-                    if item.id != items.last?.id { Divider().padding(.leading, 44) }
+    private func recordedDays(_ days: [DayTotal]) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            ForEach(days.filter { $0.seconds > 0 }.reversed()) { day in
+                Button {
+                    detailDay = day.day
+                } label: {
+                    HStack {
+                        Text(day.day.formatted(.dateTime.weekday(.wide).month().day()))
+                        Spacer()
+                        Text(Format.duration(day.distractingSeconds) + " distracting")
+                            .foregroundStyle(.secondary).monospacedDigit()
+                        Image(systemName: "chevron.right").font(Theme.Font.caption)
+                    }
+                    .font(Theme.Font.body)
+                    .padding(.vertical, Theme.Space.s)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -185,5 +206,19 @@ struct HistoryView: View {
                 }
             }
         }
+    }
+}
+
+struct HistoryFirstDaysState: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            Text("Your days will take shape.")
+                .font(Theme.Font.display(40))
+            Text("After two recorded days, you can compare your time here. You can open any recorded day or app below now.")
+                .font(Theme.Font.body)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, Theme.Space.l)
     }
 }

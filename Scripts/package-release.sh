@@ -233,6 +233,7 @@ notarize_artifact() {
 }
 verify_app() {
   codesign --verify --deep --strict --verbose=2 "$1"
+  codesign --verify --strict --verbose=2 "$1/Contents/PlugIns/ScreentimeWidget.appex"
   if [[ "$SIGNING_MODE" == developer-id ]]; then
     xcrun stapler validate "$1"
     spctl --assess --type execute --verbose=4 "$1"

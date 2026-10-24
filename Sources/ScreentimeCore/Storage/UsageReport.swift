@@ -39,6 +39,30 @@ public struct UsageReport: Sendable {
         self.segments = segments.compactMap { $0.clipped(to: interval) }.sorted { $0.start < $1.start }
     }
 
+    /// The same Apps & Sites identity as `items`: sites span browsers, while
+    /// an app row excludes time attributed to a website.
+    public func filtered(for subject: DraftSubject) -> UsageReport {
+        let domain = subject.domain.map(DomainName.normalize)
+        return UsageReport(
+            segments: segments.filter { segment in
+                let matches: Bool
+                if let domain {
+                    matches = segment.domain.map(DomainName.normalize) == domain
+                } else {
+                    matches = segment.domain == nil && segment.bundleID == subject.bundleID
+                }
+                return matches && (subject.surface == nil || segment.surface == subject.surface)
+            },
+            interval: interval)
+    }
+
+    /// Clips to a calendar day, including segments crossing midnight.
+    public func on(day: Date, calendar: Calendar = .current) -> UsageReport {
+        let start = calendar.startOfDay(for: day)
+        let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start
+        return UsageReport(segments: segments, interval: DateInterval(start: start, end: end))
+    }
+
     public var totalSeconds: TimeInterval { segments.reduce(0) { $0 + $1.duration } }
 
     public var distractingSeconds: TimeInterval {

@@ -74,6 +74,21 @@ watched, and opens the Library. The rule editor and Library rule details share
 a non-interactive, scaled rendering of the real shield; previews never start
 enforcement or a countdown. Track rules explain why no shield is shown.
 
+The rule editor starts with an editable sentence: choose its highlighted
+subject, schedule, response or daily allowance. Exceptions stay in the sentence;
+precise controls live in Details, expanded initially for multiple time windows.
+Rules rows reuse the same wording and show today's progress against each limit.
+Deleting or toggling a rule supports the window's Undo/Redo commands; deletion
+does not ask for confirmation. Rules → Lock offers the same no-early-unlock
+confirmation as Settings.
+
+Setup offers a live three-second pause before Start. Its session and turn-back
+buttons finish the demo without opening, closing or granting access to anything.
+Every shield has a pointer-operated “Why am I seeing this?” disclosure showing
+the matched rule, app/site/page/category or counted phrases, the active schedule
+or Focus window, and daily limits. Edit Rule opens that existing rule in Rules.
+The evidence stays inside the shield, with scrolling for smaller windows.
+
 Custom controls expose their labels and selection state to VoiceOver. Chips
 and hold controls use minimum rather than fixed text heights. Theme tracks,
 hairlines and soft fills strengthen with Increased Contrast; shared controls

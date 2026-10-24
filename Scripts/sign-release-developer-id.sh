@@ -4,6 +4,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ENTITLEMENTS="$ROOT/Config/Screentime.entitlements"
+WIDGET_ENTITLEMENTS="$ROOT/Config/ScreentimeWidget.entitlements"
 IDENTITY="${SCREENTIME_SIGNING_IDENTITY:-}"
 EXPECTED_TEAM_ID="${SCREENTIME_TEAM_ID:-3UX5N7Y8TY}"
 POSITIONAL=()
@@ -12,7 +13,7 @@ usage() {
   cat <<EOF
 Usage: $0 [--identity NAME_OR_SHA1] [--team-id ID] Screentime++.app
 
-Signs the Focus guard, Sparkle helpers and the outer app with timestamped Hardened Runtime.
+Signs the widget, Focus guard, Sparkle helpers and app with timestamped Hardened Runtime.
 EOF
 }
 
@@ -80,6 +81,7 @@ SPARKLE_AUTOUPDATE="$SPARKLE_VERSION/Autoupdate"
 DEVELOPMENT_DYLIB="$APP/Contents/MacOS/Screentime++.debug.dylib"
 PREVIEW_DYLIB="$APP/Contents/MacOS/__preview.dylib"
 FOCUS_GUARD="$APP/Contents/MacOS/screentime-guard"
+WIDGET="$APP/Contents/PlugIns/ScreentimeWidget.appex"
 
 if ! command -v codesign >/dev/null 2>&1; then
   echo "error: required signing tool is unavailable: codesign" >&2
@@ -116,6 +118,8 @@ require_executable() {
 require_directory "$APP" "app bundle"
 require_executable "$APP/Contents/MacOS/Screentime++" "app executable"
 require_executable "$FOCUS_GUARD" "Focus guard"
+require_directory "$WIDGET" "Today widget"
+require_executable "$WIDGET/Contents/MacOS/ScreentimeWidget" "widget executable"
 require_directory "$SPARKLE_FRAMEWORK" "embedded Sparkle framework"
 require_directory "$SPARKLE_UPDATER" "Sparkle updater"
 require_directory "$SPARKLE_DOWNLOADER" "Sparkle downloader service"
@@ -123,6 +127,15 @@ require_directory "$SPARKLE_INSTALLER" "Sparkle installer service"
 require_executable "$SPARKLE_AUTOUPDATE" "Sparkle autoupdate tool"
 if [[ ! -f "$ENTITLEMENTS" || -L "$ENTITLEMENTS" ]]; then
   echo "error: app entitlements are missing or linked: $ENTITLEMENTS" >&2
+  exit 1
+fi
+if [[ ! -f "$WIDGET_ENTITLEMENTS" || -L "$WIDGET_ENTITLEMENTS" ]]; then
+  echo "error: widget entitlements are missing or linked: $WIDGET_ENTITLEMENTS" >&2
+  exit 1
+fi
+# The unprovisioned macOS App Group is authorized by this signing team.
+if [[ "$EXPECTED_TEAM_ID" != "3UX5N7Y8TY" ]]; then
+  echo "error: the widget App Group requires signing team 3UX5N7Y8TY" >&2
   exit 1
 fi
 
@@ -155,6 +168,9 @@ sign_sparkle_artifact() {
 
 # Sign all nested code before the bundle that seals it.
 sign_artifact "$FOCUS_GUARD" "dev.screentimepp.guard"
+/usr/bin/codesign --force --sign "$IDENTITY" --timestamp --options runtime \
+  --identifier "dev.screentimepp.app.widget" --entitlements "$WIDGET_ENTITLEMENTS" \
+  --generate-entitlement-der "$WIDGET"
 sign_sparkle_artifact "$SPARKLE_UPDATER" \
   "org.sparkle-project.Sparkle.Updater"
 sign_sparkle_artifact "$SPARKLE_DOWNLOADER" \
@@ -204,6 +220,7 @@ fi
 
 for artifact in \
   "$FOCUS_GUARD" \
+  "$WIDGET" \
   "$SPARKLE_UPDATER" \
   "$SPARKLE_DOWNLOADER" \
   "$SPARKLE_INSTALLER" \
@@ -225,12 +242,18 @@ for artifact in "$DEVELOPMENT_DYLIB" "$PREVIEW_DYLIB"; do
   fi
 done
 
-for artifact in "$APP" "$FOCUS_GUARD" "$SPARKLE_UPDATER" "$SPARKLE_DOWNLOADER" "$SPARKLE_INSTALLER" "$SPARKLE_AUTOUPDATE" "$SPARKLE_VERSION" "$DEVELOPMENT_DYLIB" "$PREVIEW_DYLIB"; do
+for artifact in "$APP" "$WIDGET" "$FOCUS_GUARD" "$SPARKLE_UPDATER" "$SPARKLE_DOWNLOADER" "$SPARKLE_INSTALLER" "$SPARKLE_AUTOUPDATE" "$SPARKLE_VERSION" "$DEVELOPMENT_DYLIB" "$PREVIEW_DYLIB"; do
   [[ -e "$artifact" ]] || continue
   details="$(/usr/bin/codesign -dvvv "$artifact" 2>&1)"
   /usr/bin/grep -q '^Authority=Developer ID Application:' <<<"$details"
   /usr/bin/grep -q '^Timestamp=' <<<"$details"
   /usr/bin/grep -Eq '^CodeDirectory .*flags=.*runtime' <<<"$details"
   /usr/bin/codesign --verify --strict --verbose=2 "$artifact"
+done
+widget_entitlements="$(/usr/bin/codesign -d --entitlements - --xml "$WIDGET" 2>/dev/null)"
+[[ "$(/usr/bin/plutil -extract 'com\.apple\.security\.app-sandbox' raw -o - - <<<"$widget_entitlements")" == true ]]
+for artifact in "$APP" "$WIDGET"; do
+  entitlements="$(/usr/bin/codesign -d --entitlements - --xml "$artifact" 2>/dev/null)"
+  /usr/bin/grep -q '<string>3UX5N7Y8TY.dev.screentimepp</string>' <<<"$entitlements"
 done
 echo "complete Developer ID release signatures applied for Team ID $APP_TEAM_ID"

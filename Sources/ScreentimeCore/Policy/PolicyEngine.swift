@@ -118,11 +118,31 @@ public enum PolicyEngine {
         calendar: Calendar = .current
     ) -> Evaluation {
         let headline = FoldedText(context.headline)
-        let matches = rules.compactMap { rule -> RuleMatch? in
+        var matches = rules.compactMap { rule -> RuleMatch? in
             guard rule.isEnabled else { return nil }
             return match(rule: rule, context: context, headline: headline, content: content)
         }
         let focus = runtime.focus.flatMap { $0.isActive(at: now) ? $0 : nil }
+        if let focus {
+            var matched: (Target, MatchEvidence)?
+            if let categories = focus.categories, !categories.isEmpty {
+                let category = context.category
+                if categories.contains(category) { matched = (.category(category), .category(category)) }
+            }
+            if matched == nil, let targets = focus.targets {
+                for target in targets {
+                    if let evidence = evidence(for: target, context: context, headline: headline, content: content) {
+                        matched = (target, evidence)
+                        break
+                    }
+                }
+            }
+            if let (target, evidence) = matched {
+                let rule = Rule(id: focus.id, name: focus.title, symbol: "moon.fill", targets: [target],
+                                response: .block(BlockSettings(allowsOverride: !focus.isLocked)))
+                matches.append(RuleMatch(rule: rule, target: target, evidence: evidence))
+            }
+        }
 
         var best: Intervention?
         for match in matches {
@@ -145,7 +165,7 @@ public enum PolicyEngine {
         calendar: Calendar
     ) -> Intervention? {
         let rule = match.rule
-        let inFocus = focus.map { $0.ruleIDs.contains(rule.id) } ?? false
+        let inFocus = focus.map { $0.id == rule.id || $0.ruleIDs.contains(rule.id) } ?? false
         let scheduled = inFocus || ScheduleEvaluator.isActive(rule.schedule, at: now, calendar: calendar)
         guard scheduled else { return nil }
 

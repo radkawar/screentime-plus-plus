@@ -6,6 +6,8 @@ struct SetupView: View {
     @Environment(AppModel.self) private var model
     @State private var chosen: Set<String> = ["essentials"]
     @State private var goal = 90
+    @State private var showsPauseDemo = false
+    @State private var finishedPauseDemo = false
 
     private let packs = RulePack.all
 
@@ -78,6 +80,22 @@ struct SetupView: View {
                         .fixedSize()
                     }
                 }
+
+                step(4, "See what a pause looks like") {
+                    VStack(alignment: .leading, spacing: Theme.Space.s) {
+                        Text("A short wait gives you a moment to choose: open a timed session, or turn back.")
+                            .font(Theme.Font.body).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button(finishedPauseDemo ? "Try the Pause Again" : "Try a Pause") {
+                            showsPauseDemo = true
+                        }
+                        .buttonStyle(.borderless)
+                        if finishedPauseDemo {
+                            Label("You\u{2019}re ready. Your apps and tabs stayed as they were.", systemImage: "checkmark.circle")
+                                .font(Theme.Font.caption).foregroundStyle(Theme.accent)
+                        }
+                    }
+                }
             }
             .padding(Theme.Space.xxl)
             .frame(maxWidth: 640, alignment: .leading)
@@ -104,6 +122,9 @@ struct SetupView: View {
             .background(.bar)
         }
         .toolbar(removing: .title)
+        .sheet(isPresented: $showsPauseDemo) {
+            SetupPauseDemo { finishedPauseDemo = true }
+        }
         .task {
             // Notice the permission as soon as it is granted in System Settings.
             while !Task.isCancelled, !model.isAccessibilityTrusted {
@@ -129,5 +150,71 @@ struct SetupView: View {
 
     private func binding(_ id: String) -> Binding<Bool> {
         Binding(get: { chosen.contains(id) }, set: { if $0 { chosen.insert(id) } else { chosen.remove(id) } })
+    }
+}
+
+/// Uses the real shield and countdown, but never starts enforcement or grants access.
+struct SetupPauseDemo: View {
+    var onComplete: () -> Void = {}
+    @Environment(\.dismiss) private var dismiss
+    @State private var presentation = makePresentation()
+    @State private var coordinator = ShieldCoordinator()
+    @State private var finished = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: Theme.Space.s) {
+                    Text("See what a pause looks like").font(Theme.Font.heading)
+                    Text("Try a three-second pause. Nothing will open or close.")
+                        .font(Theme.Font.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Done") { dismiss() }
+                    .buttonStyle(.borderless)
+            }
+            .padding(Theme.Space.l)
+            Divider()
+            if finished {
+                VStack(spacing: Theme.Space.m) {
+                    Image(systemName: "checkmark.circle")
+                        .font(.system(size: 36)).foregroundStyle(Theme.accent)
+                    Text("That\u{2019}s a pause.").font(Theme.Font.display(34))
+                    Text("You choose a short session or turn back.\nYour apps and tabs stayed as they were.")
+                        .font(Theme.Font.body).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    Button("Done") { dismiss() }
+                        .buttonStyle(ShieldButtonStyle(prominent: true))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(Theme.Space.l)
+            } else {
+                ShieldCard(presentation: presentation, coordinator: coordinator, onDemoComplete: {
+                    presentation.stopClock()
+                    finished = true
+                    onComplete()
+                })
+            }
+        }
+        .frame(width: 560, height: 620)
+        .background(Theme.canvas)
+        .onAppear { presentation.startClock() }
+        .onDisappear { presentation.stopClock() }
+    }
+
+    private static func makePresentation() -> ShieldPresentation {
+        let context = ForegroundContext(
+            bundleID: "com.apple.Safari", appName: "Safari", pid: 0,
+            isBrowser: true, url: URL(string: "https://www.reddit.com/"))
+        let rule = Rule(
+            name: "Pause Reddit", targets: [.website(domain: "reddit.com")],
+            response: .pause(PauseSettings(waitSeconds: 3, escalationSeconds: 0, asksIntention: false)))
+        let now = Date()
+        guard let intervention = PolicyEngine.evaluate(
+            context: context, content: nil, rules: [rule], runtime: RuleRuntime(), now: now
+        ).intervention else {
+            preconditionFailure("The setup pause must match its sample site.")
+        }
+        return ShieldPresentation(intervention: intervention, context: context, now: now)
     }
 }

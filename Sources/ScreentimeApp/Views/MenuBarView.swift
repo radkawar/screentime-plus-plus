@@ -81,21 +81,15 @@ struct MenuBarView: View {
                 .font(Theme.Font.caption)
                 .foregroundStyle(Theme.caution)
         } else if let context = model.live.context {
-            let grant = model.live.evaluation.matches.lazy.compactMap { match in
-                model.runtime.grant(for: match.rule.id, at: model.now).map { (match.rule, $0) }
-            }.first
-            HStack(spacing: Theme.Space.s) {
-                SubjectIcon(bundleID: context.bundleID, domain: context.domain, category: context.category, size: 18)
-                Text(context.domain ?? context.appName).font(Theme.Font.body).lineLimit(1)
-                Spacer()
-                if let (rule, grant) = grant {
-                    Text("\(rule.name) \u{00B7} \(Format.countdown(grant.until.timeIntervalSince(model.now))) left")
-                        .font(Theme.Font.caption)
-                        .foregroundStyle(grant.kind == .override ? Theme.caution : Theme.accent)
-                        .monospacedDigit()
-                } else if let match = model.live.evaluation.matches.first {
-                    Text(match.rule.name).font(Theme.Font.caption).foregroundStyle(.secondary)
-                }
+            let headline = FoldedText(context.headline)
+            let coveringRule = model.live.evaluation.matches.first?.rule ?? model.configuration.rules.first {
+                PolicyEngine.match(rule: $0, context: context, headline: headline, content: model.live.content) != nil
+            }
+            let grant = coveringRule.flatMap { model.runtime.grant(for: $0.id, at: model.now) }
+            InFrontRow(subject: DraftSubject(context: context), coveredRule: coveringRule, grant: grant, now: model.now) { kind in
+                model.presentRuleDraft(RuleDraft.rule(for: DraftSubject(context: context), kind: kind))
+            } edit: { rule in
+                model.editRule(id: rule.id)
             }
         }
     }
@@ -127,7 +121,7 @@ struct MenuBarView: View {
                     Button("\(minutes)m") { startQuickFocus(minutes) }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
-                        .help("Block your focus rules for \(minutes) minutes")
+                        .help("Start \(model.defaultFocusProfile.name) for \(minutes) minutes")
                         .accessibilityLabel("Start Focus for \(minutes) minutes")
                 }
             }
@@ -154,6 +148,57 @@ struct MenuBarView: View {
     }
 
     private func startQuickFocus(_ minutes: Int) {
-        model.startFocus(minutes: minutes, ruleIDs: model.defaultFocusRuleIDs, locked: false)
+        model.startFocus(profile: model.defaultFocusProfile, minutes: minutes)
+    }
+}
+
+/// The same compact activity controls are rendered with sample subjects in QA.
+struct InFrontRow: View {
+    let subject: DraftSubject
+    var coveredRule: Rule? = nil
+    var grant: AccessGrant? = nil
+    var now: Date = Date()
+    let draft: (DraftKind) -> Void
+    let edit: (Rule) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            Text("In Front").font(Theme.Font.caption).foregroundStyle(.secondary)
+            HStack(spacing: Theme.Space.s) {
+                SubjectIcon(bundleID: subject.bundleID, domain: subject.domain,
+                            category: CategoryCatalog.category(bundleID: subject.bundleID, domain: subject.domain), size: 24)
+                Text([subject.domain ?? subject.appName, subject.surface].compactMap { $0 }.joined(separator: " · "))
+                    .font(Theme.Font.body.weight(.medium))
+                    .lineLimit(2)
+                Spacer(minLength: 0)
+            }
+            if let coveredRule {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
+                    Text(coveredRule.name).font(Theme.Font.caption).foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                    Button("Edit") { edit(coveredRule) }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Edit \(coveredRule.name)")
+                }
+                if let grant {
+                    HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
+                        Text(Format.countdown(grant.until.timeIntervalSince(now)))
+                            .font(Theme.Font.display(28)).monospacedDigit()
+                        Label(grant.kind == .override ? "Override Left" : "Session Left",
+                              systemImage: grant.kind == .override ? "exclamationmark.circle" : "timer")
+                            .font(Theme.Font.caption)
+                    }
+                    .foregroundStyle(grant.kind == .override ? Theme.caution : Theme.accent)
+                }
+            } else {
+                HStack(spacing: Theme.Space.s) {
+                    Button("Pause") { draft(.pause) }
+                    Button("Limit") { draft(.limit) }
+                    Button("Block") { draft(.block) }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
     }
 }

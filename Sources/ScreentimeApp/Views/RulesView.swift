@@ -3,9 +3,12 @@ import SwiftUI
 
 struct RulesView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.undoManager) private var undoManager
     @State private var editing: Rule?
     @State private var showsTemplates = false
     @State private var showsExport = false
+    @State private var lockDuration = LockSettings.Duration.hour
+    @State private var confirmsLock = false
 
     var body: some View {
         let rules = model.configuration.rules
@@ -38,11 +41,13 @@ struct RulesView: View {
                 }
                 if rules.isEmpty {
                     ContentUnavailableView {
-                        Label("No rules yet", systemImage: "hand.raised")
+                        Label("Make room for what you came to do", systemImage: "leaf")
                     } description: {
-                        Text("Rules decide what Screentime++ pauses, limits or blocks.")
+                        Text("Choose an app or site. Add a pause before opening it, a daily limit, or a block.")
                     } actions: {
-                        Button("Browse the Library\u{2026}") { showsTemplates = true }.buttonStyle(.borderedProminent)
+                        Button("Create a Rule") { editing = RuleTemplate.blank.make() }
+                            .buttonStyle(.borderedProminent)
+                        Button("Browse the Library…") { showsTemplates = true }.buttonStyle(.borderless)
                     }
                     .frame(maxWidth: .infinity, minHeight: 280)
                 } else {
@@ -65,6 +70,19 @@ struct RulesView: View {
         .toolbar {
             ToolbarItem {
                 Menu {
+                    ForEach(LockSettings.Duration.allCases) { duration in
+                        Button(duration.rawValue) {
+                            lockDuration = duration
+                            confirmsLock = true
+                        }
+                    }
+                } label: {
+                    Label(model.rulesLocked ? "Extend Lock" : "Lock", systemImage: "lock")
+                }
+                .help("Lock rules so they cannot be changed or turned off")
+            }
+            ToolbarItem {
+                Menu {
                     Button("Import Rule Pack…") { RulePackFiles.chooseImport(model: model) }
                     Button("Export Rules…") { showsExport = true }.disabled(rules.isEmpty)
                 } label: {
@@ -80,6 +98,11 @@ struct RulesView: View {
                 .help("Add rules from the Library")
             }
         }
+        .confirmationDialog("Lock your rules?", isPresented: $confirmsLock) {
+            Button("Lock") { model.lockRules(until: lockDuration.end) }
+        } message: {
+            Text("Until \(lockDuration.end.formatted(date: .abbreviated, time: .shortened)) there is no way to unlock early.")
+        }
         .sheet(isPresented: $showsTemplates) {
             TemplatePicker { template in
                 showsTemplates = false
@@ -90,13 +113,14 @@ struct RulesView: View {
             RulePackExportPicker(rules: rules)
         }
         .sheet(item: $editing) { rule in
-            RuleEditor(rule: rule, isNew: !rules.contains { $0.id == rule.id })
+            RuleEditor(rule: rule, isNew: !rules.contains { $0.id == rule.id }, undoManager: undoManager)
         }
     }
 }
 
 private struct RuleRow: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.undoManager) private var undoManager
     let rule: Rule
     let usage: RuleDayUsage
     let isEditable: Bool
@@ -120,15 +144,32 @@ private struct RuleRow: View {
                                 Image(systemName: "lock.fill").font(.system(size: 9)).foregroundStyle(.secondary)
                             }
                         }
-                        Text(rule.targetSummary).font(Theme.Font.caption).lineLimit(1)
-                        Text(rule.summary).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                        Text(RuleSentence(rule: rule).text)
+                            .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                     Spacer(minLength: Theme.Space.m)
-                    VStack(alignment: .trailing, spacing: 3) {
-                        Text(Format.duration(usage.seconds)).font(Theme.Font.body).monospacedDigit()
-                        Text("\(usage.opens) open\(usage.opens == 1 ? "" : "s") today")
-                            .font(Theme.Font.caption).foregroundStyle(.secondary).monospacedDigit()
+                    VStack(alignment: .trailing, spacing: Theme.Space.xs) {
+                        if let minutes = rule.limits.dailyMinutes {
+                            Text("\(Format.duration(usage.seconds)) / \(Format.minutesLabel(minutes)) today")
+                                .font(Theme.Font.caption).monospacedDigit()
+                            ProportionBar(
+                                fraction: minutes > 0 ? usage.seconds / Double(minutes * 60) : 1,
+                                color: usage.seconds >= Double(minutes * 60) ? Theme.caution : Theme.accent)
+                                .frame(width: 112)
+                        } else if rule.limits.dailyOpens == nil {
+                            Text("\(Format.duration(usage.seconds)) today")
+                                .font(Theme.Font.caption).monospacedDigit()
+                        }
+                        if let opens = rule.limits.dailyOpens {
+                            Text("\(usage.opens) / \(opens) opens today")
+                                .font(Theme.Font.caption).monospacedDigit()
+                            ProportionBar(
+                                fraction: opens > 0 ? Double(usage.opens) / Double(opens) : 1,
+                                color: usage.opens >= opens ? Theme.caution : Theme.accent)
+                                .frame(width: 112)
+                        }
                     }
+                    .foregroundStyle(.secondary)
                 }
                 .contentShape(Rectangle())
             }
@@ -136,7 +177,7 @@ private struct RuleRow: View {
             .help("Edit \(rule.name)")
             Toggle(
                 "Enabled",
-                isOn: Binding(get: { rule.isEnabled }, set: { model.setEnabled($0, rule: rule) })
+                isOn: Binding(get: { rule.isEnabled }, set: { model.setEnabled($0, rule: rule, undoManager: undoManager) })
             )
             .toggleStyle(.switch)
             .controlSize(.small)
@@ -149,10 +190,34 @@ private struct RuleRow: View {
         .contextMenu {
             Button("Edit\u{2026}", action: open)
             Divider()
-            Button("Delete", role: .destructive) { model.delete(rule: rule) }.disabled(!isEditable)
+            Button("Delete", role: .destructive) {
+                model.delete(rule: rule, undoManager: undoManager)
+            }.disabled(!isEditable)
         }
     }
 }
+
+#if DEBUG
+struct RulesListGallery: View {
+    private let rules = [
+        RuleTemplate.mindfulSocial.make(), RuleTemplate.newsDiet.make(),
+        RuleTemplate.windDown.make(), RuleTemplate.gambling.make(),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            Text("Your Rules").font(Theme.Font.title)
+            ForEach(Array(rules.enumerated()), id: \.element.id) { index, rule in
+                RuleRow(
+                    rule: rule, usage: RuleDayUsage(seconds: Double((index + 1) * 420), opens: index + 2),
+                    isEditable: false, open: {})
+                Divider()
+            }
+        }
+        .padding(Theme.Space.l)
+    }
+}
+#endif
 
 /// The Library: curated packs added in one click, or a single rule to start
 /// from. Vertical lists, not grids: each entry is a sentence.

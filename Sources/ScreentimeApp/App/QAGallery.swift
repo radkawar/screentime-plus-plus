@@ -15,6 +15,18 @@
         static func presentIfRequested(model: AppModel, updater: SPUUpdater) {
             guard CommandLine.arguments.contains("--qa-gallery") else { return }
             let env = { (view: AnyView) in AnyView(view.environment(model).tint(Theme.accent)) }
+            open(
+                "Widget Small", size: CGSize(width: 170, height: 170),
+                AnyView(TodayWidgetView(snapshot: .sample).padding(16).background(Theme.canvas)))
+            open(
+                "Widget Medium", size: CGSize(width: 360, height: 170),
+                AnyView(TodayWidgetView(snapshot: .sample, isMedium: true).padding(16).background(Theme.canvas)))
+            var overGoalWidget = WidgetSnapshot.sample
+            overGoalWidget.distractingSeconds = 75 * 60
+            open(
+                "Widget Over Goal", size: CGSize(width: 360, height: 170),
+                AnyView(TodayWidgetView(snapshot: overGoalWidget, isMedium: true).padding(16).background(Theme.canvas)))
+
 
             // Rule editor, one per response shape.
             var slack = Rule(
@@ -29,14 +41,16 @@
                 response: .block(BlockSettings(allowsOverride: true, closesAutomatically: false)))
             slack.message = "Back to the channel you came for."
             let editors: [(String, Rule)] = [
-                ("Editor Pause", RuleTemplate.mindfulSocial.make()),
-                ("Editor Block Schedule", RuleTemplate.windDown.make()),
-                ("Editor Track Limits", RuleTemplate.newsDiet.make()),
-                ("Editor Content", slack),
+                ("Sentence Pause", RuleTemplate.mindfulSocial.make()),
+                ("Sentence Schedule", RuleTemplate.windDown.make()),
+                ("Sentence Limit", RuleTemplate.newsDiet.make()),
+                ("Sentence Block", RuleTemplate.minimalYouTube.make()),
+                ("Sentence Content", slack),
             ]
             for (title, rule) in editors {
                 open(title, size: CGSize(width: 580, height: 720), env(AnyView(RuleEditor(rule: rule, isNew: false))))
             }
+            open("Rules List", size: CGSize(width: 780, height: 480), env(AnyView(RulesListGallery())))
             for kind in TargetComposer.Kind.allCases {
                 open(
                     "Composer \(kind.rawValue)", size: CGSize(width: 520, height: 460),
@@ -47,6 +61,21 @@
             open(
                 "Today First Day", size: CGSize(width: 780, height: 560),
                 env(AnyView(TodayFirstDayState(appName: "Safari", browse: {}).padding(Theme.Space.xl))))
+            open(
+                "History First Days", size: CGSize(width: 780, height: 400),
+                env(AnyView(HistoryFirstDaysState().padding(Theme.Space.xl))))
+            open(
+                "Day Detail", size: CGSize(width: 780, height: 760),
+                env(AnyView(DayDetailView(day: HistoryDetailSamples.day, sample: HistoryDetailSamples.summary))))
+            for (name, subject) in [("Site", HistoryDetailSamples.site), ("App", HistoryDetailSamples.app)] {
+                open(
+                    "Item Detail \(name)", size: CGSize(width: 640, height: 700),
+                    env(AnyView(ItemDetailView(
+                        subject: subject,
+                        sampleReport: HistoryDetailSamples.week.filtered(for: subject),
+                        sampleWeek: HistoryDetailSamples.week.filtered(for: subject),
+                        sampleRules: [HistoryDetailSamples.rule]))))
+            }
             open(
                 "Editor Shield Preview", size: CGSize(width: 420, height: 360),
                 env(AnyView(RuleShieldPreview(rule: slack).padding(Theme.Space.l))))
@@ -84,10 +113,52 @@
                 "Export Rules", size: CGSize(width: 480, height: 440),
                 env(AnyView(RulePackExportPicker(rules: model.configuration.rules))))
             open("Menu Bar", size: CGSize(width: 320, height: 360), env(AnyView(MenuBarView())))
+            let frontSite = DraftSubject(bundleID: "com.apple.Safari", appName: "Safari",
+                                         domain: "youtube.com", surface: "Shorts")
+            let frontApp = DraftSubject(bundleID: "com.tinyspeck.slackmacgap", appName: "Slack")
+            let covered = RuleDraft.rule(for: frontSite, kind: .pause)
+            let sampleNow = Date()
+            let frontRows: [(String, InFrontRow)] = [
+                ("Menu Bar In Front Site", InFrontRow(subject: frontSite, draft: { _ in }, edit: { _ in })),
+                ("Menu Bar In Front App", InFrontRow(subject: frontApp, draft: { _ in }, edit: { _ in })),
+                ("Menu Bar In Front Covered", InFrontRow(subject: frontSite, coveredRule: covered, draft: { _ in }, edit: { _ in })),
+                ("Menu Bar Session Countdown", InFrontRow(subject: frontSite, coveredRule: covered,
+                    grant: AccessGrant(ruleID: covered.id, until: sampleNow.addingTimeInterval(132), kind: .session),
+                    now: sampleNow, draft: { _ in }, edit: { _ in })),
+                ("Menu Bar Override Countdown", InFrontRow(subject: frontSite, coveredRule: covered,
+                    grant: AccessGrant(ruleID: covered.id, until: sampleNow.addingTimeInterval(42), kind: .override),
+                    now: sampleNow, draft: { _ in }, edit: { _ in })),
+            ]
+            for (title, row) in frontRows {
+                open(title, size: CGSize(width: 320, height: 220), env(AnyView(row.padding(Theme.Space.m))))
+            }
             open("Menu Bar Goal Ring", size: CGSize(width: 440, height: 240), env(AnyView(MenuBarRingGallery())))
             open(
                 "Focus Arc", size: CGSize(width: 360, height: 360),
                 AnyView(FocusArc(progress: 0.62, remaining: 31 * 60 + 12).frame(width: 260, height: 260).padding(48)))
+            let writing = FocusProfile(name: "Writing")
+            let study = FocusProfile(name: "Study", minutes: 90, isLocked: true,
+                                     categories: [.social, .entertainment, .games])
+            open("Focus Setup by Intent", size: CGSize(width: 780, height: 800),
+                 env(AnyView(FocusView(isGallery: true))))
+            open("Focus Profiles", size: CGSize(width: 600, height: 320),
+                 AnyView(FocusProfilesView(profiles: [writing, study], defaultID: writing.id,
+                                           start: { _ in }, edit: { _ in }, makeDefault: { _ in },
+                                           delete: { _ in }).padding(Theme.Space.xl).tint(Theme.accent)))
+            open("Running Focus", size: CGSize(width: 680, height: 680),
+                 AnyView(FocusRunningView(focus: writing.session(start: Date().addingTimeInterval(-600)),
+                                          rules: [], extend: {}, end: {}).padding(Theme.Space.xl)))
+            open("Setup Pause Demo", size: CGSize(width: 560, height: 620), AnyView(SetupPauseDemo()))
+            open(
+                "Time Nudge Site", size: CGSize(width: 440, height: 160),
+                AnyView(ToastView(title: "20 minutes on reddit.com", detail: "Time in this visit", symbol: "clock")))
+            open(
+                "Time Nudge App", size: CGSize(width: 440, height: 160),
+                AnyView(ToastView(title: "30 minutes on Slack", detail: "Time in this visit", symbol: "clock")))
+            open(
+                "Session Ending Nudge", size: CGSize(width: 480, height: 160),
+                AnyView(ToastView(
+                    title: "2 minutes left on x.com", detail: "Your pause returns when this session ends.", symbol: "hourglass")))
 
             for (title, context, rule, runtime) in shieldCases() {
                 guard
@@ -99,7 +170,9 @@
                 presentation.isParked = context.isBrowser
                 open(
                     title, size: CGSize(width: 760, height: 620),
-                    AnyView(ShieldCard(presentation: presentation, coordinator: model.shields)))
+                    AnyView(ShieldCard(
+                        presentation: presentation, coordinator: model.shields,
+                        showsEvidence: title.hasPrefix("Shield Evidence"))))
             }
             Toast.show(title: "Turned back", detail: "9 times today", symbol: "arrow.uturn.backward")
         }
@@ -124,6 +197,8 @@
             chatBlock.response = .block(BlockSettings(allowsOverride: true, closesAutomatically: false))
             var casino = safari("https://casino.example/")
             casino.pageTitle = "Online casino: free spins, roulette and blackjack"
+            var phraseBlock = RuleTemplate.gambling.make()
+            phraseBlock.response = .block(BlockSettings(allowsOverride: true, closesAutomatically: false))
             return [
                 ("Shield Pause Waiting", safari("https://x.com/home"), RuleTemplate.mindfulSocial.make(), RuleRuntime()),
                 ("Shield Pause Choosing", safari("https://x.com/home"), instant, RuleRuntime()),
@@ -132,6 +207,9 @@
                 ("Shield Limit", safari("https://www.nytimes.com/"), news, RuleRuntime(usageSeconds: [news.id: 1_800])),
                 ("Shield Focus Locked", safari("https://www.reddit.com/"), focusRule, RuleRuntime(focus: focus)),
                 ("Shield Auto Close", casino, RuleTemplate.gambling.make(), RuleRuntime()),
+                ("Shield Evidence Web Phrases", casino, phraseBlock, RuleRuntime()),
+                ("Shield Evidence App", slack, chatBlock, RuleRuntime()),
+                ("Shield Evidence Limit", safari("https://www.nytimes.com/"), news, RuleRuntime(usageSeconds: [news.id: 1_800])),
             ]
         }
 

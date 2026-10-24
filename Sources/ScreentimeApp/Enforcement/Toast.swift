@@ -46,7 +46,7 @@ enum Toast {
     }
 }
 
-private struct ToastView: View {
+struct ToastView: View {
     let title: String
     let detail: String
     let symbol: String
@@ -59,7 +59,7 @@ private struct ToastView: View {
                 .frame(width: 28, height: 28)
                 .background(Theme.accentSoft, in: Circle())
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(Theme.Font.body.weight(.semibold))
+                Text(title).font(Theme.Font.body.weight(.semibold)).monospacedDigit()
                 Text(detail).font(Theme.Font.caption).foregroundStyle(.secondary).monospacedDigit()
             }
         }

@@ -50,7 +50,8 @@ Watch 22m").
   *when* (always, weekly windows, or only during Focus), *response*, *limits*.
 - **Response**: Track (count only), Pause, or Block.
 - **Shield**: the card drawn over the offending window.
-- **Focus**: a timed session that escalates chosen rules to Block; can be locked.
+- **Focus**: a timed block of chosen distraction categories, apps, sites and
+  optional saved rules; can be locked.
 
 ## Decisions
 
@@ -90,6 +91,42 @@ Watch 22m").
    `PathState` flag is used because launchd does not expand home-directory
    placeholders in bundled plists.
 
+### Focus by intent
+
+Focus starts with Social, Video, Chat, News, Shopping and Games, not a rule
+list. **Also Block…** adds individual apps, sites or pages; **Include My Rules**
+is optional. Save a named profile such as Writing or Study for one-click
+starts. The menu bar's duration buttons use your default profile; the
+Start Focus shortcut accepts an optional profile name.
+
+Profiles can repeat in weekly windows, including overnight windows. An
+automatic session lasts until its window ends. Saved profile order breaks
+ties; an existing session always takes priority. Ending an unlocked session
+does not restart the same occurrence. Extending one takes over its automatic
+end time. Locked sessions cannot be stopped or replaced early.
+
+Calendar Focus is opt-in per profile. Enabling its toggle requests Calendar
+access; launch and polling never request permission. A case-insensitive
+event-title phrase selects events, and Focus runs from their start to end.
+Event changes are observed and refreshed at least every 30 seconds while the
+app monitors activity. Titles remain in memory; only an occurrence identifier
+and its end time are saved to avoid restarting an ended occurrence. Revoked
+access is shown in Focus. Existing rule-only sessions keep their behavior.
+
+### Start from what is in front
+
+The menu bar's **In Front** row offers Pause, Limit and Block for the current
+app, site or named surface. Each opens an editable rule draft; a known surface
+uses its URL patterns rather than blocking the entire site. If a rule already
+covers the activity, the row offers **Edit** instead. Active pause sessions
+show a green countdown; overrides show an amber countdown.
+
+**⌘N** creates a pause draft from what is in front, or opens the Library when
+there is no usable activity. **⌘1–⌘4** open Today, History, Rules and Focus.
+Inspector is a separate window under **Help → Inspector**, also available by
+Option-clicking the sidebar status line. The sidebar offers **This Week** on
+Sundays and Mondays.
+
 ### Weekly review and reminders
 
 History → **This Week** compares the latest seven calendar days (including
@@ -105,6 +142,15 @@ on Sunday at 18:00 local time, one minute remaining in a pause session, and
 requested only when you enable a reminder. Disabling a reminder cancels its
 pending notifications; extending a session replaces its old reminder.
 
+In-app time nudges are on by default for apps and sites covered by enabled
+rules. A quiet toast marks 10, 20 and 30 minutes of continuous use, then every
+30 minutes; Settings → Notifications also offers 15, 30 and 45 minutes (then
+every 30), an off switch, and **Also for Everything**. Changing subjects or
+reaching the idle threshold resets the clock; short away periods do not count.
+Pause sessions get a separate toast with two minutes left, once per grant.
+These nudges never block, play sounds, or request notification permission, and
+are withheld while a shield or Focus block is showing.
+
 ### Portable rules and history
 
 Rules can be exported together or individually as a `.stpack` JSON file from
@@ -117,6 +163,15 @@ Settings → Privacy & Data exports foreground segments for the last 7 days,
 durations are seconds. Matched rules use their current name, or their UUID if
 the rule was deleted. Exported history is a separate local file and is not
 removed when you delete history in the app.
+
+### Every number is a door
+
+Clicking a day in History opens it like Today: headline, ribbon, apps and
+sites, and interventions. Clicking any app or site row (Today, History, a day)
+opens its detail: the range total, seven days of use, pages and surfaces, the
+rules that cover it, and Pause / Limit / Block when nothing covers it yet. The
+same actions are on each row's context menu. Historical headlines compare
+against your current goal; past goals are not stored.
 
 ## Non-goals (for now)
 

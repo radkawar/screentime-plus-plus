@@ -8,23 +8,31 @@ struct ShieldCard: View {
     @Bindable var presentation: ShieldPresentation
     let coordinator: ShieldCoordinator
     var isPreview = false
+    /// Setup routes every demo action here instead of changing an app or tab.
+    var onDemoComplete: (() -> Void)?
+    @State var showsEvidence = false
 
     var body: some View {
         ZStack {
             Theme.canvas
-            VStack(spacing: Theme.Space.l) {
-                Spacer(minLength: Theme.Space.l)
-                header
-                if let pause = presentation.pause {
-                    PauseBody(presentation: presentation, pause: pause, coordinator: coordinator, isPreview: isPreview)
-                } else if let block = presentation.block {
-                    BlockBody(presentation: presentation, block: block, coordinator: coordinator)
+            ScrollView {
+                VStack(spacing: Theme.Space.l) {
+                    header
+                    if let pause = presentation.pause {
+                        PauseBody(
+                            presentation: presentation, pause: pause, coordinator: coordinator,
+                            isPreview: isPreview, onDemoComplete: onDemoComplete)
+                    } else if let block = presentation.block {
+                        BlockBody(presentation: presentation, block: block, coordinator: coordinator)
+                    }
+                    explanation
+                    footer
                 }
-                Spacer(minLength: Theme.Space.l)
-                footer
+                .padding(Theme.Space.xl)
+                .frame(maxWidth: 520)
+                .frame(maxWidth: .infinity)
             }
-            .padding(Theme.Space.xl)
-            .frame(maxWidth: 520)
+            .defaultScrollAnchor(.center, for: .alignment)
         }
         .clipShape(
             UnevenRoundedRectangle(
@@ -98,6 +106,87 @@ struct ShieldCard: View {
         return ""
     }
 
+    private var explanation: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            Button {
+                showsEvidence.toggle()
+            } label: {
+                HStack(spacing: Theme.Space.s) {
+                    Text("Why am I seeing this?")
+                    Image(systemName: showsEvidence ? "chevron.up" : "chevron.down")
+                }
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .font(Theme.Font.caption)
+            .foregroundStyle(.secondary)
+            .accessibilityValue(showsEvidence ? "Expanded" : "Collapsed")
+
+            if showsEvidence {
+                VStack(alignment: .leading, spacing: Theme.Space.s) {
+                    Text(presentation.rule.name).font(Theme.Font.heading)
+                    Text(matchDescription)
+                        .font(Theme.Font.body)
+                    Text(scheduleDescription)
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(.secondary)
+                    if let minutes = presentation.rule.limits.dailyMinutes {
+                        Text("Daily limit: \(Format.minutesLabel(minutes))")
+                            .font(Theme.Font.caption).foregroundStyle(.secondary)
+                    }
+                    if let opens = presentation.rule.limits.dailyOpens {
+                        Text("Daily limit: \(opens) open\(opens == 1 ? "" : "s")")
+                            .font(Theme.Font.caption).foregroundStyle(.secondary)
+                    }
+                    Button("Edit Rule") {
+                        if let onDemoComplete {
+                            onDemoComplete()
+                        } else {
+                            AppModel.shared?.editRule(id: presentation.rule.id)
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(Theme.accent)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(Theme.Space.m)
+                .background(Theme.track, in: RoundedRectangle(cornerRadius: 12))
+            }
+        }
+    }
+
+    private var matchDescription: String {
+        let evidence = presentation.intervention.match.evidence
+        switch evidence {
+        case .app: return "App: \(evidence.summary)"
+        case .website: return "Site: \(evidence.summary)"
+        case .urlPattern: return "Page pattern: \(evidence.summary)"
+        case .category: return "Category: \(evidence.summary)"
+        case .phrases(let counts, let total):
+            let phrases = counts.map {
+                "\u{201C}\($0.phrase)\u{201D} \u{00D7} \($0.count)"
+            }.joined(separator: ", ")
+            return "Phrases: \(phrases) \u{00B7} \(total) mention\(total == 1 ? "" : "s")"
+        }
+    }
+
+    private var scheduleDescription: String {
+        if case .focus(let title, let until, let locked) = presentation.block?.reason {
+            return "\(title) until \(Format.clock(until))\(locked ? " \u{00B7} Locked" : "")"
+        }
+        switch presentation.rule.schedule {
+        case .always: return "Schedule: Always"
+        case .duringFocus: return "Schedule: During Focus"
+        case .windows(let windows):
+            let active = windows.filter {
+                ScheduleEvaluator.contains($0, date: presentation.shownAt, calendar: .current)
+            }
+            return "Schedule: " + active.map(\.summary).joined(separator: " \u{00B7} ")
+        }
+    }
+
     private var footer: some View {
         Label("Screentime++", systemImage: "hourglass")
             .font(Theme.Font.caption)
@@ -111,6 +200,7 @@ private struct PauseBody: View {
     let pause: PauseIntervention
     let coordinator: ShieldCoordinator
     var isPreview = false
+    var onDemoComplete: (() -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -128,12 +218,14 @@ private struct PauseBody: View {
                 VStack(spacing: Theme.Space.m) {
                     HStack(spacing: Theme.Space.s) {
                         ForEach(pause.sessionMinutes, id: \.self) { minutes in
-                            Button("\(minutes) min") { coordinator.choose(minutes: minutes) }
+                            Button("\(minutes) min") {
+                                if let onDemoComplete { onDemoComplete() } else { coordinator.choose(minutes: minutes) }
+                            }
                                 .buttonStyle(ShieldButtonStyle(prominent: false))
                         }
                     }
                     Button(presentation.isBrowser ? "Not now, close the tab" : "Not now, hide \(presentation.appName)") {
-                        coordinator.closeTabOrHide()
+                        decline()
                     }
                     .buttonStyle(ShieldButtonStyle(prominent: true))
                     .keyboardShortcut(.defaultAction)
@@ -141,14 +233,18 @@ private struct PauseBody: View {
                 .transition(.opacity)
             } else {
                 Button(presentation.isBrowser ? "Close the tab instead" : "Hide \(presentation.appName) instead") {
-                    coordinator.closeTabOrHide()
+                    decline()
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderless)
                 .font(Theme.Font.body)
                 .foregroundStyle(Theme.accent)
             }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: presentation.phase)
+    }
+
+    private func decline() {
+        if let onDemoComplete { onDemoComplete() } else { coordinator.closeTabOrHide() }
     }
 }
 

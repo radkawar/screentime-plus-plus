@@ -3,8 +3,6 @@ import SwiftUI
 
 struct TodayView: View {
     @Environment(AppModel.self) private var model
-    @State private var showsAllItems = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showsLibrary = false
     @State private var editing: Rule?
 
@@ -22,13 +20,13 @@ struct TodayView: View {
                         isWatching: model.live.status == .active,
                         browse: { showsLibrary = true })
                 } else {
-                    headline(report: report, streak: summary.streakDays)
+                    DayHeadline(report: report, day: model.now, goalMinutes: model.configuration.settings.dailyGoalMinutes, streak: summary.streakDays)
                     DayRibbon(segments: report.segments, day: model.now, now: model.now, height: 44)
-                    stats(summary)
-                    items(report)
+                    DayStats(summary: summary)
+                    UsageItems(report: report)
                 }
                 if !summary.interventions.isEmpty {
-                    interventions(summary.interventions)
+                    DayInterventions(records: summary.interventions)
                 }
             }
             .padding(.horizontal, Theme.Space.xl)
@@ -47,15 +45,22 @@ struct TodayView: View {
         .sheet(item: $editing) { RuleEditor(rule: $0, isNew: true) }
     }
 
-    // MARK: Headline
+}
 
-    private func headline(report: UsageReport, streak: Int) -> some View {
-        let goal = TimeInterval(model.configuration.settings.dailyGoalMinutes * 60)
+struct DayHeadline: View {
+    let report: UsageReport
+    let day: Date
+    let goalMinutes: Int
+    var streak = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let goal = TimeInterval(goalMinutes * 60)
         let distracting = report.distractingSeconds
         let over = distracting - goal
         return VStack(alignment: .leading, spacing: Theme.Space.s) {
             HStack(alignment: .firstTextBaseline) {
-                Text(model.now.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                Text(day.formatted(.dateTime.weekday(.wide).day().month(.wide)))
                     .font(Theme.Font.label)
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
@@ -87,9 +92,12 @@ struct TodayView: View {
         }
     }
 
-    // MARK: Stats
+}
 
-    private func stats(_ summary: TodaySummary) -> some View {
+struct DayStats: View {
+    let summary: TodaySummary
+
+    var body: some View {
         let report = summary.report
         let shown = summary.interventions.count
         return FlowLayout(spacing: Theme.Space.xl, lineSpacing: Theme.Space.m) {
@@ -101,15 +109,19 @@ struct TodayView: View {
         }
     }
 
-    // MARK: Items
+}
 
-    @ViewBuilder
-    private func items(_ report: UsageReport) -> some View {
+struct UsageItems: View {
+    let report: UsageReport
+    @State private var showsAllItems = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
         let items = report.items
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             SectionTitle(title: "Apps & Sites", trailing: items.isEmpty ? nil : "\(items.count)")
             if items.isEmpty {
-                Text("Nothing recorded yet today. Time shows up here within a minute of use.")
+                Text("Nothing recorded on this day.")
                     .font(Theme.Font.body)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, Theme.Space.s)
@@ -118,7 +130,7 @@ struct TodayView: View {
                 let maxSeconds = items.first?.seconds ?? 1
                 VStack(spacing: 0) {
                     ForEach(visible) { item in
-                        UsageRow(item: item, maxSeconds: maxSeconds)
+                        UsageRow(item: item, maxSeconds: maxSeconds, interval: report.interval)
                         if item.id != visible.last?.id { Divider().padding(.leading, 44) }
                     }
                 }
@@ -133,9 +145,12 @@ struct TodayView: View {
         }
     }
 
-    // MARK: Interventions
+}
 
-    private func interventions(_ records: [InterventionRecord]) -> some View {
+struct DayInterventions: View {
+    let records: [InterventionRecord]
+
+    var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             SectionTitle(title: "Interventions", trailing: "\(records.count)")
             VStack(spacing: 0) {

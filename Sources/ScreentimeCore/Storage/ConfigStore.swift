@@ -21,6 +21,10 @@ public struct AppSettings: Codable, Hashable, Sendable {
     public var weeklyReviewNotifications: Bool?
     public var sessionEndingNotifications: Bool?
     public var goalNotifications: Bool?
+    /// Nil keeps default-on, rule-covered in-app nudges for older configurations.
+    public var timeNudgesEnabled: Bool?
+    public var timeNudgeCadence: TimeNudgeCadence?
+    public var timeNudgesForEverything: Bool?
 
     public init(
         dailyGoalMinutes: Int = 90, idleThresholdSeconds: Int = 120, inspectsPageText: Bool = true,
@@ -44,6 +48,8 @@ public struct AppSettings: Codable, Hashable, Sendable {
 public struct AppConfiguration: Codable, Hashable, Sendable {
     public var rules: [Rule]
     public var focus: FocusSession?
+    public var focusProfiles: [FocusProfile]?
+    public var defaultFocusProfileID: UUID?
     public var grants: [AccessGrant]
     public var settings: AppSettings
 

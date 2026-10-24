@@ -28,6 +28,13 @@ through macOS Accessibility, and everything is decided on this Mac.
 ## Highlights
 
 - Apps and websites are first-class: block, pause or limit either.
+- Start from what's in front: the menu bar offers Pause, Limit and Block for the
+  app, site or page you're on (⌘N does the same), and every row in Today and
+  History has the same actions plus a detail view.
+- Rules read as sentences ("When you open social apps and sites any time, pause
+  10s…"); tap any phrase to change it.
+- Gentle time nudges ("20 minutes on reddit.com") for covered apps and sites,
+  without blocking. A desktop widget shows your goal ring and day ribbon.
 - A Library of curated packs (Essentials, Deep Work, Evenings and Mornings,
   Minimal Social, Games and Streaming, Spending and News, Safety), each added in
   one click and fully editable.
@@ -38,7 +45,8 @@ through macOS Accessibility, and everything is decided on this Mac.
   session), **Block** (shield, with an optional deliberate override). Each rule
   can carry your own words for its shield, such as "Is this important right now?".
 - Daily time and open limits, weekly schedules (overnight aware), and exceptions.
-- Focus sessions that block chosen rules, optionally locked until they end.
+- Focus by intent: toggle Social, Video, Chat, News, Shopping or Games, save
+  profiles, repeat them on a schedule or during calendar events, and lock them.
 - Lock your rules until a time, so they can be tightened but not weakened.
 - Today: distracting time against a daily goal, a 24-hour activity ribbon,
   pickups, streaks, and every intervention with what you said you were there for.
