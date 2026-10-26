@@ -19,6 +19,8 @@ final class SQLiteDatabase {
         guard status == SQLITE_OK else {
             let message = handle.map { String(cString: sqlite3_errmsg($0)) } ?? "open failed"
             sqlite3_close(handle)
+            // A throwing init still runs deinit; clear the handle so it is not closed twice.
+            handle = nil
             throw SQLiteError(code: status, message: message)
         }
         sqlite3_busy_timeout(handle, 2_000)

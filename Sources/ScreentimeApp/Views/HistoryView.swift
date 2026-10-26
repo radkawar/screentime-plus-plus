@@ -64,9 +64,7 @@ struct HistoryView: View {
         }
             }
         }
-        .onChange(of: selectedDay) { _, day in
-            if let day { detailDay = Calendar.current.startOfDay(for: day) }
-        }
+        // Hovering only highlights a day; opening one takes a click (see the chart gesture).
         .task(id: range) { await load() }
         .sheet(isPresented: $showsWeeklyReview) { WeeklyReviewSheet().environment(model) }
     }
@@ -148,7 +146,26 @@ struct HistoryView: View {
                 }
             }
             .chartXScale(domain: chartDomain(days))
-            .chartXSelection(value: $selectedDay)
+            // Hovering highlights a day and shows its caption; only a click opens it.
+            .chartOverlay { proxy in
+                GeometryReader { geometry in
+                    let plot = proxy.plotFrame.map { geometry[$0] } ?? .zero
+                    Rectangle().fill(.clear).contentShape(Rectangle())
+                        .onContinuousHover { phase in
+                            switch phase {
+                            case .active(let location):
+                                selectedDay = dayWithData(at: location.x - plot.minX, proxy: proxy, days: days)?.day
+                            case .ended:
+                                selectedDay = nil
+                            }
+                        }
+                        .onTapGesture { location in
+                            guard let day = dayWithData(at: location.x - plot.minX, proxy: proxy, days: days) else { return }
+                            selectedDay = nil
+                            detailDay = day.day
+                        }
+                }
+            }
             .chartLegend(position: .bottom, alignment: .leading, spacing: Theme.Space.m)
             .frame(height: 240)
             if let selectedDay, let day = days.first(where: { Calendar.current.isDate($0.day, inSameDayAs: selectedDay) }) {
@@ -160,6 +177,12 @@ struct HistoryView: View {
                 .monospacedDigit()
             }
         }
+    }
+
+    /// The recorded day under a plot x position, or nil over empty days and margins.
+    private func dayWithData(at x: CGFloat, proxy: ChartProxy, days: [DayTotal]) -> DayTotal? {
+        guard let date: Date = proxy.value(atX: x) else { return nil }
+        return days.first { Calendar.current.isDate($0.day, inSameDayAs: date) && $0.seconds > 0 }
     }
 
     /// The whole range, so a single recorded day is one bar among empty days.
