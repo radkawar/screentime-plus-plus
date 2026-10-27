@@ -136,17 +136,27 @@ struct MenuBarView: View {
     @ViewBuilder
     private var pauseControls: some View {
         if let until = model.rulesPausedUntil {
-            HStack {
-                Image(systemName: "pause.circle.fill").foregroundStyle(Theme.caution)
-                Text("Rules paused until \(Format.clock(until))").font(Theme.Font.body)
-                Spacer()
-                Button("Resume") { model.resumeRules() }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                HStack {
+                    Image(systemName: "pause.circle.fill").foregroundStyle(Theme.caution)
+                    Text("Rules paused until \(Format.clock(until))").font(Theme.Font.body)
+                    Spacer()
+                    Button("Resume") { model.resumeRules() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+                Text(model.today.bypassed == 0
+                     ? "Time still counts. Anything a rule covers is logged."
+                     : "Time still counts. \(model.today.bypassed) bypassed today, logged in Today.")
+                    .font(Theme.Font.caption).foregroundStyle(.secondary)
             }
         } else if model.canPauseRules {
-            HoldToConfirmButton(title: "Hold to pause all rules for 15 min", inset: false) { model.pauseRules(minutes: 15) }
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                HoldToConfirmButton(title: "Hold to pause all rules for 15 min", inset: false) { model.pauseRules(minutes: 15) }
+                Text("Time still counts, and what you open is logged.")
+                    .font(Theme.Font.caption).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

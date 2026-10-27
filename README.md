@@ -55,6 +55,8 @@ through macOS Accessibility, and everything is decided on this Mac.
 - Inspector: what the engine sees right now and what each rule decides.
 - Menu bar: today against your goal, one-click Focus, and a press-and-hold
   safety valve that pauses every rule for 15 minutes (unavailable while locked).
+  Pausing is not a loophole: time still counts, and every pause and everything
+  a rule would have stopped during it is logged in Today and History.
 - Weekly review: the last seven days against the seven before, with optional
   notifications (review ready, session ending, 80% of your goal).
 - Shortcuts and Siri: Start Focus, End Focus, Pause Rules and Today's Summary as

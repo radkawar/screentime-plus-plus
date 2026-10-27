@@ -29,6 +29,7 @@ struct TodaySummary {
     var report: UsageReport
     var interventions: [InterventionRecord]
     var streakDays: Int
+    var pauses: [RulePause] = []
 
     static func empty(now: Date) -> TodaySummary {
         let start = Calendar.current.startOfDay(for: now)
@@ -39,6 +40,10 @@ struct TodaySummary {
 
     var turnedBack: Int {
         interventions.filter { $0.outcome == .turnedBack || $0.outcome == .closed }.count
+    }
+
+    var bypassed: Int {
+        interventions.filter { $0.outcome == .bypassed }.count
     }
 }
 
@@ -64,6 +69,8 @@ final class AppModel {
     @ObservationIgnored private let nudges = Nudges()
     @ObservationIgnored private var lastReload = Date.distantPast
     @ObservationIgnored private var reloadTask: Task<Void, Never>?
+    /// Rule and subject pairs already logged as bypassed during the current pause.
+    @ObservationIgnored private var bypassedDuringPause: Set<String> = []
 
     /// Mirrors the coordinator so views can observe it.
     private(set) var shieldPresentation: ShieldPresentation?
@@ -133,12 +140,20 @@ final class AppModel {
                 tracker?.record(context: context, matches: [], isShielded: true, at: sample.date)
                 break
             }
+            // Rules still match while paused, so the time counts as distracting and toward
+            // limits. Only the shield is withheld, and what it would have done is logged.
             let evaluation = PolicyEngine.evaluate(
-                context: context, content: sample.content, rules: rulesPausedUntil == nil ? configuration.rules : [],
-                runtime: runtime,
+                context: context, content: sample.content, rules: configuration.rules, runtime: runtime,
                 now: sample.date)
             live.evaluation = evaluation
-            shields.update(intervention: evaluation.intervention, reading: reading, now: sample.date)
+            if rulesPausedUntil != nil {
+                shields.update(intervention: nil, reading: reading, now: sample.date)
+                if let intervention = evaluation.intervention {
+                    logBypass(intervention, context: context, at: sample.date)
+                }
+            } else {
+                shields.update(intervention: evaluation.intervention, reading: reading, now: sample.date)
+            }
             tracker?.record(
                 context: context, matches: evaluation.matches, isShielded: shields.active != nil, at: sample.date)
         case .own:
@@ -162,7 +177,7 @@ final class AppModel {
         let usage = tracker?.ruleUsage ?? [:]
         return RuleRuntime(
             usageSeconds: usage.mapValues(\.seconds), opens: usage.mapValues(\.opens),
-            grants: configuration.grants, focus: rulesPausedUntil == nil ? configuration.focus : nil)
+            grants: configuration.grants, focus: configuration.focus)
     }
 
     func usage(for rule: Rule) -> RuleDayUsage {
@@ -193,21 +208,34 @@ final class AppModel {
 
     // MARK: Shield outcomes
 
-    private func logPresented(_ presentation: ShieldPresentation, context: ForegroundContext) -> Int64? {
-        let kind: InterventionKind
-        switch presentation.intervention {
-        case .pause: kind = .pause
+    private static func kind(of intervention: Intervention) -> InterventionKind {
+        switch intervention {
+        case .pause: .pause
         case .block(let block):
             switch block.reason {
-            case .focus: kind = .focus
-            case .minutesLimit, .opensLimit: kind = .limit
-            case .rule: kind = .block
+            case .focus: .focus
+            case .minutesLimit, .opensLimit: .limit
+            case .rule: .block
             }
         }
+    }
+
+    private func logPresented(_ presentation: ShieldPresentation, context: ForegroundContext) -> Int64? {
         let record = InterventionRecord(
-            at: presentation.shownAt, ruleID: presentation.rule.id, ruleName: presentation.rule.name, kind: kind,
-            subject: context.domain ?? context.appName, outcome: .shown)
+            at: presentation.shownAt, ruleID: presentation.rule.id, ruleName: presentation.rule.name,
+            kind: Self.kind(of: presentation.intervention), subject: context.domain ?? context.appName, outcome: .shown)
         return try? store?.insert(record)
+    }
+
+    /// Once per rule and site or app per pause: what a shield would have done.
+    private func logBypass(_ intervention: Intervention, context: ForegroundContext, at: Date) {
+        let rule = intervention.match.rule
+        guard bypassedDuringPause.insert("\(rule.id)|\(context.subject)").inserted else { return }
+        let record = InterventionRecord(
+            at: at, ruleID: rule.id, ruleName: rule.name, kind: Self.kind(of: intervention),
+            subject: context.domain ?? context.appName, outcome: .bypassed)
+        try? store?.insert(record)
+        reloadToday()
     }
 
     private func handleResolution(_ active: ShieldCoordinator.Active, _ resolution: ShieldResolution) {
@@ -235,8 +263,9 @@ final class AppModel {
         case .closedAutomatically:
             outcome = .closed
         case .released:
-            // A global pause is a deliberate bypass, recorded like an override.
-            outcome = .overridden
+            // Pausing rules lifted this shield: the rest of the pause logs it as bypassed.
+            bypassedDuringPause.insert("\(active.ruleID)|\(active.subject)")
+            outcome = .bypassed
         }
         if config != configuration { commit(config) }
         if let id = active.recordID {
@@ -262,10 +291,11 @@ final class AppModel {
             let interval = DateInterval(start: start, end: max(now, start.addingTimeInterval(1)))
             let segments = (try? store.segments(in: interval)) ?? []
             let interventions = (try? store.interventions(in: interval)) ?? []
+            let pauses = (try? store.rulePauses(in: interval)) ?? []
             let streak = Self.streak(store: store, goal: goal, now: now, calendar: calendar)
             let summary = TodaySummary(
                 report: UsageReport(segments: segments, interval: interval), interventions: interventions,
-                streakDays: streak)
+                streakDays: streak, pauses: pauses)
             await MainActor.run { [weak self] in
                 guard !Task.isCancelled else { return }
                 self?.today = summary
@@ -290,7 +320,7 @@ final class AppModel {
         else { return 0 }
         let days = UsageReport(segments: segments, interval: interval).daily(calendar: calendar)
         let overriddenDays = Set(
-            interventions.filter { $0.outcome == .overridden }.map { calendar.startOfDay(for: $0.at) })
+            interventions.filter { $0.outcome.breaksStreak }.map { calendar.startOfDay(for: $0.at) })
         let firstDay = segments.first.map { calendar.startOfDay(for: $0.start) } ?? todayStart
         var streak = 0
         for day in days.reversed() where day.day >= firstDay {
@@ -349,8 +379,14 @@ final class AppModel {
     func history(on day: Date) async -> TodaySummary {
         let start = Calendar.current.startOfDay(for: day)
         let end = Calendar.current.date(byAdding: .day, value: 1, to: start) ?? start
-        let (report, interventions) = await history(in: DateInterval(start: start, end: end))
-        return TodaySummary(report: report, interventions: interventions, streakDays: 0)
+        let interval = DateInterval(start: start, end: end)
+        let (report, interventions) = await history(in: interval)
+        return TodaySummary(report: report, interventions: interventions, streakDays: 0, pauses: await rulePauses(in: interval))
+    }
+
+    func rulePauses(in interval: DateInterval) async -> [RulePause] {
+        guard let store else { return [] }
+        return await Task.detached(priority: .userInitiated) { (try? store.rulePauses(in: interval)) ?? [] }.value
     }
 
     func history(for subject: DraftSubject, in interval: DateInterval) async -> UsageReport {
@@ -591,6 +627,7 @@ final class AppModel {
     }
 
     private func commit(_ config: AppConfiguration) {
+        recordPauseChange(from: configuration.settings.rulesPausedUntil, to: config.settings.rulesPausedUntil)
         configuration = config
         notifications.reconcile(configuration: config, today: today)
         do {
@@ -602,6 +639,21 @@ final class AppModel {
         shields.parksTabs = config.settings.parksBrowserTabs
         applyMonitorConfiguration()
         monitor.refresh()
+    }
+
+    /// Every way a pause starts or ends early (menu bar, App Intent, a lock, a Focus) goes through here.
+    private func recordPauseChange(from old: Date?, to new: Date?) {
+        let at = Date()
+        let wasPaused = old.map { $0 > at } ?? false
+        let isPaused = new.map { $0 > at } ?? false
+        if wasPaused && !isPaused {
+            try? store?.endRulePauses(at: at)
+            reloadToday()
+        } else if isPaused && !wasPaused, let new {
+            bypassedDuringPause = []
+            try? store?.insert(RulePause(start: at, end: new))
+            reloadToday()
+        }
     }
 
     private func applyMonitorConfiguration() {

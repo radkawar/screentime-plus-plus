@@ -20,6 +20,9 @@ struct DayDetailView: View {
                     DayRibbon(segments: summary.report.segments, day: day, now: model.now, height: 44)
                     DayStats(summary: summary)
                     UsageItems(report: summary.report)
+                    if !summary.pauses.isEmpty {
+                        RulePausesSection(pauses: summary.pauses, summary: summary)
+                    }
                     if summary.interventions.isEmpty {
                         SectionTitle(title: "Interventions", trailing: "None")
                     } else {

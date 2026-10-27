@@ -59,6 +59,48 @@ public enum InterventionOutcome: String, Sendable, Codable {
     case overridden
     /// The tab was closed or the app hidden automatically.
     case closed
+    /// Rules were paused from the menu bar, so this was not shielded. Counts like an override.
+    case bypassed
+
+    /// Overriding a shield or using something while rules are paused ends a streak.
+    public var breaksStreak: Bool { self == .overridden || self == .bypassed }
+}
+
+/// A "pause all rules" from the menu bar. `end` is the planned end until the
+/// pause is resumed early, a lock begins, or a Focus starts.
+public struct RulePause: Sendable, Hashable, Identifiable {
+    public var id: Int64
+    public var start: Date
+    public var end: Date
+
+    public init(id: Int64 = 0, start: Date, end: Date) {
+        self.id = id
+        self.start = start
+        self.end = end
+    }
+
+    public var interval: DateInterval { DateInterval(start: start, end: max(start, end)) }
+
+    /// Rule-covered time recorded during this pause, per rule, most first.
+    public func coveredUse(in segments: [Segment]) -> [PausedUse] {
+        var byRule: [UUID: PausedUse] = [:]
+        for segment in segments {
+            guard let ruleID = segment.ruleID, let clipped = segment.clipped(to: interval) else { continue }
+            var use = byRule[ruleID] ?? PausedUse(ruleID: ruleID, seconds: 0, subjects: [])
+            use.seconds += clipped.duration
+            let subject = segment.domain ?? segment.appName
+            if !use.subjects.contains(subject) { use.subjects.append(subject) }
+            byRule[ruleID] = use
+        }
+        return byRule.values.sorted { $0.seconds != $1.seconds ? $0.seconds > $1.seconds : $0.ruleID.uuidString < $1.ruleID.uuidString }
+    }
+}
+
+public struct PausedUse: Sendable, Hashable {
+    public var ruleID: UUID
+    public var seconds: TimeInterval
+    /// Sites or apps, in the order they were first used during the pause.
+    public var subjects: [String]
 }
 
 public struct InterventionRecord: Sendable, Hashable, Identifiable {
@@ -158,6 +200,11 @@ public final class UsageStore: @unchecked Sendable {
             CREATE TABLE IF NOT EXISTS history_imports(
                 source TEXT PRIMARY KEY,
                 imported_at REAL NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS rule_pauses(
+                id INTEGER PRIMARY KEY,
+                start REAL NOT NULL,
+                end REAL NOT NULL
             );
             PRAGMA user_version = 1;
             """)
@@ -355,11 +402,49 @@ public final class UsageStore: @unchecked Sendable {
         }
     }
 
+    // MARK: Rule pauses
+
+    @discardableResult
+    public func insert(_ pause: RulePause) throws -> Int64 {
+        try locked {
+            try database.run(
+                "INSERT INTO rule_pauses(start, end) VALUES (?, ?)",
+                [.real(pause.start.timeIntervalSince1970), .real(pause.end.timeIntervalSince1970)])
+            return database.lastInsertRowID
+        }
+    }
+
+    /// Ends every pause still running at `date`: resumed early, or replaced by a lock or Focus.
+    public func endRulePauses(at date: Date) throws {
+        let at = date.timeIntervalSince1970
+        try locked {
+            try database.run("UPDATE rule_pauses SET end = ? WHERE start <= ? AND end > ?", [.real(at), .real(at), .real(at)])
+        }
+    }
+
+    /// Pauses overlapping `interval`, oldest first.
+    public func rulePauses(in interval: DateInterval) throws -> [RulePause] {
+        try locked {
+            var result: [RulePause] = []
+            try database.query(
+                "SELECT id, start, end FROM rule_pauses WHERE end > ? AND start < ? ORDER BY start",
+                [.real(interval.start.timeIntervalSince1970), .real(interval.end.timeIntervalSince1970)]
+            ) { row in
+                result.append(
+                    RulePause(
+                        id: row.int(0), start: Date(timeIntervalSince1970: row.double(1)),
+                        end: Date(timeIntervalSince1970: row.double(2))))
+            }
+            return result
+        }
+    }
+
     // MARK: Maintenance
 
     public func deleteAll() throws {
         try locked {
-            try database.execute("DELETE FROM segments; DELETE FROM interventions; DELETE FROM rule_usage;")
+            try database.execute(
+                "DELETE FROM segments; DELETE FROM interventions; DELETE FROM rule_usage; DELETE FROM rule_pauses;")
         }
     }
 
@@ -368,6 +453,7 @@ public final class UsageStore: @unchecked Sendable {
         try locked {
             try database.run("DELETE FROM segments WHERE end < ?", [.real(cutoff)])
             try database.run("DELETE FROM interventions WHERE at < ?", [.real(cutoff)])
+            try database.run("DELETE FROM rule_pauses WHERE end < ?", [.real(cutoff)])
         }
     }
 }

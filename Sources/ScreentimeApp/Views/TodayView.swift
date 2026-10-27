@@ -25,6 +25,9 @@ struct TodayView: View {
                     DayStats(summary: summary)
                     UsageItems(report: report)
                 }
+                if !summary.pauses.isEmpty {
+                    RulePausesSection(pauses: summary.pauses, summary: summary)
+                }
                 if !summary.interventions.isEmpty {
                     DayInterventions(records: summary.interventions)
                 }
@@ -106,6 +109,12 @@ struct DayStats: View {
             Stat(
                 value: shown == 0 ? "None" : "\(summary.turnedBack) of \(shown)",
                 label: shown == 0 ? "interventions" : "times you turned back")
+            if !summary.pauses.isEmpty {
+                Stat(
+                    value: "\(summary.pauses.count)\u{00D7}",
+                    label: summary.bypassed == 0 ? "rules paused" : "rules paused \u{00B7} \(summary.bypassed) bypassed",
+                    color: Theme.caution)
+            }
         }
     }
 
@@ -205,13 +214,73 @@ struct TodayFirstDayState: View {
 private struct Stat: View {
     let value: String
     let label: String
+    var color: Color = .primary
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(value).font(.system(size: 20, weight: .medium, design: .serif)).monospacedDigit()
+            Text(value).font(.system(size: 20, weight: .medium, design: .serif)).monospacedDigit().foregroundStyle(color)
             Text(label).font(Theme.Font.caption).foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Each "pause all rules": when, how long, and what the rules would have stopped.
+struct RulePausesSection: View {
+    @Environment(AppModel.self) private var model
+    let pauses: [RulePause]
+    let summary: TodaySummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            SectionTitle(title: "Rule Pauses", trailing: "\(pauses.count)")
+            VStack(spacing: 0) {
+                ForEach(pauses) { pause in
+                    row(pause)
+                    if pause.id != pauses.last?.id { Divider() }
+                }
+            }
+            Text("Time used while rules are paused still counts toward your goal and limits.")
+                .font(Theme.Font.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func row(_ pause: RulePause) -> some View {
+        let running = pause.end > model.now
+        let used = pause.coveredUse(in: summary.report.segments)
+        return HStack(alignment: .firstTextBaseline, spacing: Theme.Space.m) {
+            Text(Format.clock(pause.start))
+                .font(Theme.Font.caption).foregroundStyle(.secondary).monospacedDigit()
+                .frame(width: 64, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(running
+                     ? "Paused until \(Format.clock(pause.end))"
+                     : "Paused \(Format.duration(pause.end.timeIntervalSince(pause.start))), until \(Format.clock(pause.end))")
+                    .font(Theme.Font.body.weight(.medium))
+                if used.isEmpty {
+                    Text(running ? "Nothing a rule covers so far." : "Nothing a rule covers was used.")
+                        .font(Theme.Font.caption).foregroundStyle(.secondary)
+                } else {
+                    ForEach(used, id: \.ruleID) { use in
+                        Text("\(ruleName(use.ruleID)) \u{00B7} \(Format.duration(use.seconds, showSeconds: true)) \u{00B7} \(use.subjects.prefix(3).joined(separator: ", "))")
+                            .font(Theme.Font.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            Spacer()
+            if !used.isEmpty {
+                Label(Format.duration(used.reduce(0) { $0 + $1.seconds }, showSeconds: true), systemImage: "pause.circle")
+                    .font(Theme.Font.caption).foregroundStyle(Theme.caution).monospacedDigit()
+            }
+        }
+        .padding(.vertical, 7)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func ruleName(_ id: UUID) -> String {
+        model.configuration.rules.first { $0.id == id }?.name
+            ?? summary.interventions.first { $0.ruleID == id }?.ruleName
+            ?? "A deleted rule"
     }
 }
 
@@ -251,6 +320,7 @@ struct InterventionRow: View {
             case .continued: ("Continued", "arrow.right", .secondary)
             case .overridden: ("Overrode", "exclamationmark.circle", Theme.caution)
             case .closed: ("Closed", "xmark.circle", Theme.accent)
+            case .bypassed: ("While paused", "pause.circle", Theme.caution)
             }
         return Label(text, systemImage: symbol)
             .font(Theme.Font.caption)

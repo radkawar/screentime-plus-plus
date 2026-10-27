@@ -57,6 +57,14 @@ final class WeeklyReviewTests: XCTestCase {
         XCTAssertEqual(review.previous.pauseCount, 1)
     }
 
+    func testUsingSomethingWhileRulesArePausedBreaksTheStreak() {
+        let segments = (18...24).map { segment($0, minutes: 20) }
+        let review = WeeklyReview(segments: segments, interventions: [event(21, outcome: .bypassed)], goalMinutes: 20,
+                                  now: date(24, hour: 18), calendar: calendar)
+        XCTAssertEqual(review.current.longestStreak, 3)
+        XCTAssertEqual(review.current.turnedBackRate, 0)
+    }
+
     func testMissingDaysBreakStreakAndEmptyHistoryDoesNotInventSuccess() {
         let review = WeeklyReview(segments: [segment(18, minutes: 10), segment(20, minutes: 10)],
                                   interventions: [], goalMinutes: 90, now: date(24), calendar: calendar)

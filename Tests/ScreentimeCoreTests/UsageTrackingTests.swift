@@ -129,6 +129,39 @@ final class UsageTrackingTests: XCTestCase {
         XCTAssertEqual(records.first?.intention, "Watch the WWDC talk")
     }
 
+    func testResumingEarlyEndsOnlyTheRunningPauseAndQueriesOverlap() throws {
+        try store.insert(RulePause(start: date(21, 9), end: date(21, 9, 15)))
+        try store.insert(RulePause(start: date(21, 10), end: date(21, 10, 15)))
+        try store.endRulePauses(at: date(21, 10, 4))
+        let pauses = try store.rulePauses(in: DateInterval(start: date(21, 0), end: date(22, 0)))
+        XCTAssertEqual(pauses.map(\.end), [date(21, 9, 15), date(21, 10, 4)])
+        // A pause crossing the start of a query interval still belongs to it.
+        XCTAssertEqual(try store.rulePauses(in: DateInterval(start: date(21, 9, 10), end: date(21, 9, 30))).count, 1)
+        try store.deleteAll()
+        XCTAssertTrue(try store.rulePauses(in: DateInterval(start: date(21, 0), end: date(22, 0))).isEmpty)
+    }
+
+    func testPausedUseClipsToThePauseAndIgnoresUncoveredTime() {
+        let social = UUID()
+        let chat = UUID()
+        func segment(_ from: Int, _ to: Int, _ domain: String?, _ rule: UUID?) -> Segment {
+            Segment(start: date(21, 10, from), end: date(21, 10, to), bundleID: "app", appName: "Discord",
+                    domain: domain, surface: nil, category: .social, ruleID: rule)
+        }
+        let pause = RulePause(start: date(21, 10, 5), end: date(21, 10, 20))
+        let used = pause.coveredUse(in: [
+            segment(0, 8, "x.com", social),      // 3 minutes inside the pause
+            segment(8, 10, nil, nil),            // not covered by a rule
+            segment(10, 14, "reddit.com", social),
+            segment(14, 16, nil, chat),
+            segment(25, 30, "x.com", social),    // after the pause
+        ])
+        XCTAssertEqual(used.map(\.ruleID), [social, chat])
+        XCTAssertEqual(used.map(\.seconds), [7 * 60, 2 * 60])
+        XCTAssertEqual(used.first?.subjects, ["x.com", "reddit.com"])
+        XCTAssertEqual(used.last?.subjects, ["Discord"])
+    }
+
     func testConfigurationRoundTrips() throws {
         let url = directory.appendingPathComponent("configuration.json")
         var configuration = AppConfiguration.starter

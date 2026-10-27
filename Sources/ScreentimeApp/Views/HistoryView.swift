@@ -7,6 +7,7 @@ struct HistoryView: View {
     @State private var range: Range = .week
     @State private var report: UsageReport?
     @State private var interventions: [InterventionRecord] = []
+    @State private var pauses: [RulePause] = []
     @State private var selectedDay: Date?
     @State private var showsWeeklyReview = false
     @State private var detailDay: Date?
@@ -71,8 +72,10 @@ struct HistoryView: View {
 
     private func load() async {
         let (report, interventions) = await model.history(days: range.rawValue)
+        let pauses = await model.rulePauses(in: report.interval)
         self.report = report
         self.interventions = interventions
+        self.pauses = pauses
     }
 
     private func summary(days: [DayTotal]) -> some View {
@@ -93,6 +96,15 @@ struct HistoryView: View {
             )
             .font(Theme.Font.body)
             .foregroundStyle(.secondary)
+            if !pauses.isEmpty {
+                let bypassed = interventions.filter { $0.outcome == .bypassed }.count
+                Label(
+                    "Rules paused \(pauses.count) time\(pauses.count == 1 ? "" : "s")"
+                        + (bypassed == 0 ? "." : ", \(bypassed) bypassed. Open a day to see what."),
+                    systemImage: "pause.circle")
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.caution)
+            }
         }
     }
 

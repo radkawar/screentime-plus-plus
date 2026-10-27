@@ -164,6 +164,17 @@ durations are seconds. Matched rules use their current name, or their UUID if
 the rule was deleted. Exported history is a separate local file and is not
 removed when you delete history in the app.
 
+### Pausing is visible, not free
+
+"Hold to pause all rules" withholds shields for 15 minutes; it does not stop
+the engine. Rules still match, so paused time counts as distracting and toward
+each rule's daily limits. Each pause is stored with its start and end (ended
+early by Resume, a lock, or a Focus). The first time a rule would have
+intervened on a site or app during a pause is logged as a **While paused**
+intervention, which ends a streak like an override and lowers the turned-back
+rate. Today and the day detail list each pause with the rule-covered time used
+during it; History notes how many pauses fell in the range.
+
 ### Every number is a door
 
 Clicking a day in History opens it like Today: headline, ribbon, apps and

@@ -16,7 +16,7 @@ final class Nudges {
         }
         let shielded = model.shields.active != nil
         let focusBlocked: Bool
-        if case .block(let block) = model.live.evaluation.intervention, case .focus = block.reason {
+        if model.rulesPausedUntil == nil, case .block(let block) = model.live.evaluation.intervention, case .focus = block.reason {
             focusBlocked = true
         } else {
             focusBlocked = false

@@ -29,7 +29,7 @@ public struct WeeklyReview: Sendable {
                 .sorted { $0.at < $1.at }
             recordedDays = days.filter { $0.seconds > 0 }.count
             daysInsideGoal = days.filter { $0.seconds > 0 && $0.distractingSeconds <= goal }.count
-            let overridden = Set(self.interventions.filter { $0.outcome == .overridden }.map { calendar.startOfDay(for: $0.at) })
+            let overridden = Set(self.interventions.filter { $0.outcome.breaksStreak }.map { calendar.startOfDay(for: $0.at) })
             var run = 0
             var longest = 0
             for day in days {
